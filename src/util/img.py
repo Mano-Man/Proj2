@@ -1,9 +1,6 @@
-import numpy as np
 from scipy.misc import imread
 import PIL
 from PIL import Image
-from math import sqrt
-import sys
 
 # ----------------------------------------------------------------------------------------------------------------------
 #

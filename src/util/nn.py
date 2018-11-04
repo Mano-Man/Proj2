@@ -1,15 +1,11 @@
-from inspect import currentframe, getframeinfo
-from datetime import datetime
 import numpy as np
-import sys
-
+import matplotlib as plt
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               	Model Plot
 # ----------------------------------------------------------------------------------------------------------------------
 
 def plot_model_history(model_history):
-	# Might not be needed - Pytorch and Keras have similar functionality
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
     # summarize history for accuracy
     axs[0].plot(range(1, len(model_history.history['acc']) + 1), model_history.history['acc'])
@@ -28,7 +24,6 @@ def plot_model_history(model_history):
     axs[1].set_xticks(np.arange(1, len(model_history.history['loss']) + 1), len(model_history.history['loss']) / 10)
     axs[1].legend(['train', 'val'], loc='best')
     plt.show()
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               	Probability Sample
