@@ -9,6 +9,7 @@ import torch.backends.cudnn as cudnn
 
 # Models: (There are many more)
 from models.resnet import ResNet18
+from models.resnet_spatial import ResNet18Spatial
 # from models.googlenet import GoogleNet
 # from models.densenet import DenseNet121
 # from models.vgg import VGG  # VGG('VGG19')
@@ -21,6 +22,7 @@ from models.resnet import ResNet18
 import os
 from util.data_import import CIFAR10_Train, CIFAR10_Test
 from util.gen import Progbar, banner
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -32,7 +34,20 @@ N_EPOCHS = 1
 LEARN_RATE = 0.01
 BATCH_SIZE = 128
 TRAIN_SET_SIZE = 10000  # Max 50000
+LOAD_FILE_NAME = 'ckpt.t7'
 
+# Spatial Net Test:
+patch_size = 2
+cuda0 = torch.device('cuda:0')
+sp0 = (patch_size, torch.ones([64, 32, 32],device=cuda0))
+sp1 = (patch_size, torch.ones([64, 32, 32],device=cuda0))
+sp2 = (patch_size, torch.ones([128, 16, 16],device=cuda0))
+sp3 = (patch_size, torch.ones([256, 8, 8],device=cuda0))
+sp4 = (patch_size, torch.ones([512, 4, 4],device=cuda0))
+sp_list = [sp0, sp1, sp2, sp3, sp4]
+
+
+# net = ResNet18Spatial(sp_list)
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -40,7 +55,7 @@ TRAIN_SET_SIZE = 10000  # Max 50000
 def main():
     nn = NeuralNet()
     nn.train(N_EPOCHS)
-    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE)
+    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE) #Check the case when we don't download! 
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
@@ -60,7 +75,9 @@ class NeuralNet:
 
         # Build Model:
         print('==> Building  model..')
-        self.net = ResNet18()
+
+        self.net = ResNet18Spatial(sp_list)
+        # self.net = ResNet18()
         self.net = self.net.to(self.device)
         if self.device == 'cuda':
             self.net = torch.nn.DataParallel(self.net)
@@ -73,7 +90,7 @@ class NeuralNet:
         if RESUME_CHECKPOINT:
             print('==> Resuming from checkpoint')
             assert os.path.isdir('./data/checkpoint'), 'Error: no checkpoint directory found!'
-            checkpoint = torch.load('./data/checkpoint/ckpt.t7')
+            checkpoint = torch.load('./data/checkpoint/'+LOAD_FILE_NAME)
             self.net.load_state_dict(checkpoint['net'])
             self.best_val_acc = checkpoint['acc']
             print(f'==> Loaded model with val-acc of {self.best_val_acc}')

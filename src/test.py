@@ -47,19 +47,18 @@ if __name__ == "__main__":
         
     # Model
     print('==> Building model..')
-    patch_size = 2
 #mask sizes for sp_i:
 #   sp0[1].shape =  (64, 32, 32)
 #   sp1[1].shape =  (64, 32, 32)
 #   sp2[1].shape =  (128, 16, 16)
 #   sp3[1].shape = (256, 8, 8)
 #   sp4[1].shape = (512, 4, 4)
+    patch_size = 2
     sp0 = (patch_size, torch.ones(64, 32, 32))
     sp1 = (patch_size, torch.ones(64, 32, 32))
     sp2 = (patch_size, torch.ones(128, 16, 16))
     sp3 = (patch_size, torch.ones(256, 8, 8))
     sp4 = (patch_size, torch.ones(512, 4, 4))
-    
     sp_list = [sp0, sp1, sp2, sp3, sp4]
 
     net = ResNet18Spatial(sp_list)
