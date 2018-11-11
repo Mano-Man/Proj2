@@ -134,7 +134,7 @@ def one_patch_diff3d_uniform_patch(C, N, M, patch_size, min_ones, max_ones):
     for mask2d in uniform_mask2d(N, M, patch_size, min_ones, max_ones):
         for cc in range(C):
             mask = np.ones((patch_n*patch_size,patch_m*patch_size, C))
-            mask[:,:,cc] = mask2d[:, :, np.newaxis]
+            mask[:,:,cc] = mask2d
             yield mask
                 
     
@@ -144,6 +144,6 @@ def one_patch_diff3d_uniform_patch(C, N, M, patch_size, min_ones, max_ones):
 
 count =0
 mask = 0
-for m in one_patch_diff3d(64, 32, 32, 2, 2, 3):
+for m in one_patch_diff3d_uniform_patch(64, 32, 32, 2, 2, 3):
     mask = m
     count = count + 1
