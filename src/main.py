@@ -72,8 +72,8 @@ class NeuralNet:
 
         if RESUME_CHECKPOINT:
             print('==> Resuming from checkpoint')
-            assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-            checkpoint = torch.load('./checkpoint/ckpt.t7')
+            assert os.path.isdir('./data/checkpoint'), 'Error: no checkpoint directory found!'
+            checkpoint = torch.load('./data/checkpoint/ckpt.t7')
             self.net.load_state_dict(checkpoint['net'])
             self.best_val_acc = checkpoint['acc']
             print(f'==> Loaded model with val-acc of {self.best_val_acc}')
@@ -132,9 +132,9 @@ class NeuralNet:
                 'acc': acc,
                 'epoch': epoch,
             }
-            if not os.path.isdir('checkpoint'):
-                os.mkdir('checkpoint')
-            torch.save(state, './checkpoint/ckpt.t7')
+            if not os.path.isdir('./data/checkpoint'):
+                os.mkdir('./data/checkpoint')
+            torch.save(state, './data/checkpoint/ckpt.t7')
             self.best_acc = acc
 
     def _train_step(self):
