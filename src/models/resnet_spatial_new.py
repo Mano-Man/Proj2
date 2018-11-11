@@ -119,17 +119,17 @@ class BasicBlockS(nn.Module):
 
 # Spatial_params_Li = (filt_size, mask)
 class ResNetS(nn.Module):
-    def __init__(self, block, num_blocks, spatial_params_L0, spatial_params_L1, spatial_params_L2,spatial_params_L3, spatial_params_L4,num_classes=10):
+    def __init__(self, block, num_blocks, sp_list,num_classes=10):
         super(ResNetS, self).__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
-        self.pred = spatial_new(64, spatial_params_L0)
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], spatial_params_L1, stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], spatial_params_L2, stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], spatial_params_L3, stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], spatial_params_L4, stride=2)
+        self.pred = spatial_new(64, sp_list[0])
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], sp_list[1], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], sp_list[2], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], sp_list[3], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], sp_list[4], stride=2)
         self.linear = nn.Linear(512*block.expansion, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, spatial_params, stride):
@@ -159,8 +159,9 @@ class ResNetS(nn.Module):
 #   sp2[1].shape =  (128, 16, 16)
 #   sp3[1].shape = (256, 8, 8)
 #   sp4[1].shape = (512, 4, 4)
-def ResNet18Spatial(sp0,sp1,sp2,sp3,sp4,pretrained=False, **kwargs):
-    model = ResNetS(BasicBlockS, [2,2,2,2],sp0,sp1,sp2,sp3,sp4, **kwargs)
+# sp_i = (patch_size, mask)
+def ResNet18Spatial(sp_list,pretrained=False, **kwargs):
+    model = ResNetS(BasicBlockS, [2,2,2,2],sp_list, **kwargs)
     
     for p in model.pred.conv_filt.parameters():
         p.requires_grad = False
