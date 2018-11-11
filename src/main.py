@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------------------------------------------------------------
 # Torch Libraries:
 import torch
-import torch.nn as nn
+import torch.nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 
@@ -15,50 +15,34 @@ from models.resnet import ResNet18
 
 # Utils:
 # from run_config import RunConfig, RunDefaults
-from tqdm import tqdm
-import os
-from util.fs import enable_dir
-from util.data_import import CIFAR10
-from util.gen import Progbar
-
+# from tqdm import tqdm
 # from pickle import load, dump
+
+import os
+from util.data_import import CIFAR10_Train, CIFAR10_Test
+from util.gen import Progbar, banner
+# ----------------------------------------------------------------------------------------------------------------------
+#
+# ----------------------------------------------------------------------------------------------------------------------
+
+VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
+
+RESUME_CHECKPOINT = True
+N_EPOCHS = 1
+LEARN_RATE = 0.01
+BATCH_SIZE = 128
+TRAIN_SET_SIZE = 10000  # Max 50000
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
 def main():
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    best_acc = 0  # best test accuracy
-    start_epoch = 0  # start from epoch 0 or last checkpoint epoch
-
-    trainloader, testloader, classes = CIFAR10()
-
-    # Model
-    print('==> Building model..')
-    net = ResNet18()
-    net = net.to(device)
-    if device == 'cuda':
-        net = torch.nn.DataParallel(net)
-        cudnn.benchmark = True
-
-    if 0:
-        # Load checkpoint.
-        print('==> Resuming from checkpoint..')
-        assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-        checkpoint = torch.load('./checkpoint/ckpt.t7')
-        net.load_state_dict(checkpoint['net'])
-        best_acc = checkpoint['acc']
-        start_epoch = checkpoint['epoch']
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
-
-    NUM_EPOCHS = 200
-    progbar = Progbar(NUM_EPOCHS)
-    for epoch in range(start_epoch, start_epoch + NUM_EPOCHS):
-        train_loss, train_acc, train_count = train(epoch, net, optimizer, device, trainloader, criterion)
-        val_loss, val_acc, val_count = test(epoch, net, device, testloader, criterion, best_acc)
-        progbar.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc),
-                               ("v_loss", val_loss), ("v_acc", val_acc)])
+    nn = NeuralNet()
+    nn.train(N_EPOCHS)
+    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE)
+    test_loss, test_acc, count = nn.test(test_gen)
+    print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -66,98 +50,121 @@ def main():
 # ----------------------------------------------------------------------------------------------------------------------
 class NeuralNet:
     def __init__(self):
-        #self.rc = RunConfig()
-        #self.defs = RunDefaults()
-        #self.best_acc = self.rc.record_acc()
 
+        # Decide on device:
+        if torch.cuda.is_available():
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
+            print('Warning: Found no valid GPU device - Running on CPU')
+
+        # Build Model:
+        print('==> Building  model..')
+        self.net = ResNet18()
+        self.net = self.net.to(self.device)
         if self.device == 'cuda':
-            net = torch.nn.DataParallel(net)
+            self.net = torch.nn.DataParallel(self.net)
             cudnn.benchmark = True
 
-    def train(self):
+        # Build SGD Algorithm:
+        self.criterion = torch.nn.CrossEntropyLoss()
+        self.optimizer = optim.SGD(self.net.parameters(), lr=LEARN_RATE, momentum=0.9, weight_decay=5e-4)
 
+        if RESUME_CHECKPOINT:
+            print('==> Resuming from checkpoint')
+            assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
+            checkpoint = torch.load('./checkpoint/ckpt.t7')
+            self.net.load_state_dict(checkpoint['net'])
+            self.best_val_acc = checkpoint['acc']
+            print(f'==> Loaded model with val-acc of {self.best_val_acc}')
+            self.start_epoch = checkpoint['epoch']
+        else:
+            self.best_val_acc = 0
+            self.start_epoch = 0
 
-    def test(self):
+        # Init Data:
+        self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=BATCH_SIZE, dataset_size=TRAIN_SET_SIZE)
 
+    def train(self, n_epochs):
+        if (VERBOSITY > 0):
+            p = Progbar(n_epochs)
+        for epoch in range(self.start_epoch, self.start_epoch + n_epochs):
+            banner(f'Epoch: {epoch}')
+            train_loss, train_acc, train_count = self._train_step()
+            val_loss, val_acc, val_count = self.test(self.val_gen)
+            self._checkpoint(val_acc, epoch + 1)
+            if (VERBOSITY > 0):
+                p.add(1,
+                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
+        banner('Training Phase - End')
 
-        net = nn_creator()
-        data =
-        net = net.to(device)
+    def test(self, data_gen):
 
-        if self.device == 'cuda':
-            net = torch.nn.DataParallel(net)
-            cudnn.benchmark = True
+        self.net.eval()
+        test_loss = 0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(data_gen):
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                outputs = self.net(inputs)
+                loss = self.criterion(outputs, targets)
 
+                test_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
 
-# Training
-def train(epoch, net, optimizer, device, trainloader, criterion):
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
+                # val_loss = f'{test_loss/(batch_idx+1):.3f}.'
+                # acc = f'{100.*correct/total:.3f}.'
+                # count = f'{correct}/{total}'
 
-    progbar = Progbar(len(trainloader))
+        test_acc = 100. * correct / total
+        count = f'{correct}/{total}'
 
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
+        return test_loss, test_acc, count
 
-        train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
+    def _checkpoint(self, acc, epoch):
+        if acc > self.best_val_acc:
+            print(f'Beat val_acc record of {self.best_val_acc} with {acc} - Saving checkpoint')
+            state = {
+                'net': self.net.state_dict(),
+                'acc': acc,
+                'epoch': epoch,
+            }
+            if not os.path.isdir('checkpoint'):
+                os.mkdir('checkpoint')
+            torch.save(state, './checkpoint/ckpt.t7')
+            self.best_acc = acc
 
-        train_loss = float(f'{train_loss/(batch_idx+1):.3f}')
-        acc = float(f'{100.*correct/total:.3f}')
-        progbar.add(1, values=[("t_loss", train_loss), ("t_acc", acc)])
+    def _train_step(self):
+        self.net.train()
+        train_loss = 0
+        correct = 0
+        total = 0
 
-        # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-        #              % (train_loss / (batch_idx + 1), 100. * correct / total, correct, total))
-    acc = 100. * correct / total
-    count = f'{correct}/{total}'
-    return train_loss, acc, count
+        epoch_progress = Progbar(len(self.train_gen))
+        for batch_idx, (inputs, targets) in enumerate(self.train_gen):
+            # Training step
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            self.optimizer.zero_grad()
+            outputs = self.net(inputs)
+            loss = self.criterion(outputs, targets)
+            loss.backward()
+            self.optimizer.step()
 
-
-def test(epoch, net, device, testloader, criterion, best_acc):
-    net.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
-
-            test_loss += loss.item()
+            # Collect results:
+            train_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            # val_loss = f'{test_loss/(batch_idx+1):.3f}.'
-            # acc = f'{100.*correct/total:.3f}.'
-            # count = f'{correct}/{total}'
+            epoch_progress.add(1, values=[("t_loss", train_loss / (batch_idx + 1)), ("t_acc", 100. * correct / total)])
 
-    # Save checkpoint.
-    acc = 100. * correct / total
-    count = f'{correct}/{total}'
-    if acc > best_acc:
-        print(f'Beat val_acc record of {best_acc} with {acc} - Saving checkpoint')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.t7')
-        best_acc = acc
-    return test_loss, acc, count
+        total_acc = 100. * correct / total
+        count = f'{correct}/{total}'
+        return train_loss, total_acc, count
 
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    main()

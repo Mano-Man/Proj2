@@ -31,3 +31,4 @@ def imshow(im,title=None):
     print("Image Size: {} x {} of mode: {}".format(im.height,im.width,im.mode))
     im.show(title)
 
+

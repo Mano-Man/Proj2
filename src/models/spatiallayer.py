@@ -30,7 +30,7 @@ class spatial(nn.Module):
     def __init__(self, channels, filt_size, mask):
         super(spatial, self).__init__()
         self.channels = channels
-        self.mask = mask;
+        self.mask = mask
         #self.filt = torch.ones(filt_size,filt_size)
         self.filt_size = filt_size
         self.conv_filt = nn.Conv2d(channels, channels, \

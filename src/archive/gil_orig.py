@@ -18,8 +18,9 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
-
-
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                   Gil Implementation
+# ----------------------------------------------------------------------------------------------------------------------
 def expand_mat(x, s, p):
     x_cpu = x.cpu()
     x_numpy = x_cpu.data.numpy()
@@ -35,6 +36,10 @@ def expand_mat(x, s, p):
 
     return x_mask
 
+def conv3x3(in_planes, out_planes, stride=1):
+    """3x3 convolution with padding"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False)
 
 class spatial(nn.Module):
     def __init__(self, channels):
@@ -80,13 +85,6 @@ class spatial(nn.Module):
         x_pred = torch.mul(x, pred_mask_ex)
         return x_pred
 
-
-def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
-
-
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -120,7 +118,9 @@ class BasicBlock(nn.Module):
         out = self.pred(out)
 
         return out
-
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                  End of Gil Implementation
+# ----------------------------------------------------------------------------------------------------------------------
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -230,8 +230,6 @@ def resnet18(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
-
-    i = 0
 
     for p in model.pred.conv_filt.parameters():
         p.requires_grad = False
