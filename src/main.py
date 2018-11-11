@@ -7,72 +7,40 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 
-import torchvision
-import torchvision.transforms as transforms
-
-# Models:
+# Models: (There are many more)
 from models.resnet import ResNet18
+# from models.googlenet import GoogleNet
+# from models.densenet import DenseNet121
+# from models.vgg import VGG  # VGG('VGG19')
 
 # Utils:
+# from run_config import RunConfig, RunDefaults
 from tqdm import tqdm
-from pickle import load, dump
 import os
-import argparse
+from util.fs import enable_dir
+from util.data_import import CIFAR10
+from util.gen import Progbar
+
+# from pickle import load, dump
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
-
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-    parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-    parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
-    args = parser.parse_args()
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     best_acc = 0  # best test accuracy
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-    # Data
-    print('==> Preparing data..')
-    transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
-
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
-
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
-
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    trainloader, testloader, classes = CIFAR10()
 
     # Model
     print('==> Building model..')
-    # net = VGG('VGG19')
     net = ResNet18()
-    # net = PreActResNet18()
-    # net = GoogLeNet()
-    # net = DenseNet121()
-    # net = ResNeXt29_2x64d()
-    # net = MobileNet()
-    # net = MobileNetV2()
-    # net = DPN92()
-    # net = ShuffleNetG2()
-    # net = SENet18()
     net = net.to(device)
     if device == 'cuda':
         net = torch.nn.DataParallel(net)
         cudnn.benchmark = True
 
-    if args.resume:
+    if 0:
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
         assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
@@ -82,63 +50,114 @@ def main():
         start_epoch = checkpoint['epoch']
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
 
-    for epoch in range(start_epoch, start_epoch + 200):
-        # TRAIN
-        print('\nEpoch: %d' % epoch)
-        net.train()
-        train_loss = 0
-        correct = 0
-        total = 0
-        for batch_idx, (inputs, targets) in tqdm(enumerate(trainloader)):
+    NUM_EPOCHS = 200
+    progbar = Progbar(NUM_EPOCHS)
+    for epoch in range(start_epoch, start_epoch + NUM_EPOCHS):
+        train_loss, train_acc, train_count = train(epoch, net, optimizer, device, trainloader, criterion)
+        val_loss, val_acc, val_count = test(epoch, net, device, testloader, criterion, best_acc)
+        progbar.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc),
+                               ("v_loss", val_loss), ("v_acc", val_acc)])
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
+# ----------------------------------------------------------------------------------------------------------------------
+class NeuralNet:
+    def __init__(self):
+        #self.rc = RunConfig()
+        #self.defs = RunDefaults()
+        #self.best_acc = self.rc.record_acc()
+
+        if self.device == 'cuda':
+            net = torch.nn.DataParallel(net)
+            cudnn.benchmark = True
+
+    def train(self):
+
+
+    def test(self):
+
+
+        net = nn_creator()
+        data =
+        net = net.to(device)
+
+        if self.device == 'cuda':
+            net = torch.nn.DataParallel(net)
+            cudnn.benchmark = True
+
+
+# Training
+def train(epoch, net, optimizer, device, trainloader, criterion):
+    print('\nEpoch: %d' % epoch)
+    net.train()
+    train_loss = 0
+    correct = 0
+    total = 0
+
+    progbar = Progbar(len(trainloader))
+
+    for batch_idx, (inputs, targets) in enumerate(trainloader):
+        inputs, targets = inputs.to(device), targets.to(device)
+        optimizer.zero_grad()
+        outputs = net(inputs)
+        loss = criterion(outputs, targets)
+        loss.backward()
+        optimizer.step()
+
+        train_loss += loss.item()
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        correct += predicted.eq(targets).sum().item()
+
+        train_loss = float(f'{train_loss/(batch_idx+1):.3f}')
+        acc = float(f'{100.*correct/total:.3f}')
+        progbar.add(1, values=[("t_loss", train_loss), ("t_acc", acc)])
+
+        # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        #              % (train_loss / (batch_idx + 1), 100. * correct / total, correct, total))
+    acc = 100. * correct / total
+    count = f'{correct}/{total}'
+    return train_loss, acc, count
+
+
+def test(epoch, net, device, testloader, criterion, best_acc):
+    net.eval()
+    test_loss = 0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            optimizer.zero_grad()
             outputs = net(inputs)
             loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
 
-            train_loss += loss.item()
+            test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            #    % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            # val_loss = f'{test_loss/(batch_idx+1):.3f}.'
+            # acc = f'{100.*correct/total:.3f}.'
+            # count = f'{correct}/{total}'
 
-        # TEST
-        net.eval()
-        test_loss = 0
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for batch_idx, (inputs, targets) in tqdm(enumerate(testloader)):
-                inputs, targets = inputs.to(device), targets.to(device)
-                outputs = net(inputs)
-                loss = criterion(outputs, targets)
-
-                test_loss += loss.item()
-                _, predicted = outputs.max(1)
-                total += targets.size(0)
-                correct += predicted.eq(targets).sum().item()
-
-                # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                #              % (test_loss / (batch_idx + 1), 100. * correct / total, correct, total))
-
-        # Save checkpoint.
-        acc = 100. * correct / total
-        if acc > best_acc:
-            print('Saving..')
-            state = {
-                'net': net.state_dict(),
-                'acc': acc,
-                'epoch': epoch,
-            }
-            if not os.path.isdir('checkpoint'):
-                os.mkdir('checkpoint')
-            torch.save(state, './checkpoint/ckpt.t7')
-            best_acc = acc
+    # Save checkpoint.
+    acc = 100. * correct / total
+    count = f'{correct}/{total}'
+    if acc > best_acc:
+        print(f'Beat val_acc record of {best_acc} with {acc} - Saving checkpoint')
+        state = {
+            'net': net.state_dict(),
+            'acc': acc,
+            'epoch': epoch,
+        }
+        if not os.path.isdir('checkpoint'):
+            os.mkdir('checkpoint')
+        torch.save(state, './checkpoint/ckpt.t7')
+        best_acc = acc
+    return test_loss, acc, count
 
 
 if __name__ == '__main__': main()
