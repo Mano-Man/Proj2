@@ -42,7 +42,7 @@ BATCH_SIZE = 128
 TRAIN_SET_SIZE = 10000  # Max 50000
 
 # Checkpoint Adjustments
-RESUME_CHECKPOINT = True
+RESUME_CHECKPOINT = False
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
 CHECKPOINT_DIR = './data/checkpoint/'
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
@@ -69,20 +69,17 @@ class NeuralNet:
             self.device = torch.device('cuda')
             cudnn.benchmark = True
             if torch.cuda.device_count() > 1:
-                print("Detected", torch.cuda.device_count(), "GPUs!")
+                raise AssertionError
+                # This line enables multiple GPUs, but changes the layer names a bit
+                # self.net = torch.nn.DataParallel(self.net)  # Useful if you have multiple GPUs - does not hurt otherwise
         else:
             self.device = torch.device('cpu')
+            #torch.set_num_threads(4) # Presuming 4 cores
             print('WARNING: Found no valid GPU device - Running on CPU')
 
         # Build Model:
         print(f'==> Building model {NET.__name__}')
         self.net = NET()
-        self.net = torch.nn.DataParallel(self.net)  # Useful if you have multiple GPUs - does not hurt otherwise
-        self.net = self.net.to(self.device)
-
-        # Build SGD Algorithm:
-        self.criterion = torch.nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(self.net.parameters(), lr=LEARN_RATE, momentum=0.9, weight_decay=5e-4)
 
         if RESUME_CHECKPOINT:
             print(f'==> Resuming from checkpoint via sorting method: {RESUME_METHOD}')
@@ -109,6 +106,14 @@ class NeuralNet:
             self.best_val_acc = 0
             self.start_epoch = 0
 
+
+        self.net = self.net.to(self.device)
+
+        # Build SGD Algorithm:
+        self.criterion = torch.nn.CrossEntropyLoss()
+        self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=LEARN_RATE, momentum=0.9, weight_decay=5e-4)
+
+        # Bring in Data
         self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=BATCH_SIZE, dataset_size=TRAIN_SET_SIZE,
                                                                    download=DO_DOWNLOAD)
 
@@ -181,7 +186,7 @@ class NeuralNet:
         total = 0
 
         if VERBOSITY > 0:
-            p_bybatch = Progbar(len(self.train_gen))
+            prog_batch = Progbar(len(self.train_gen))
         for batch_idx, (inputs, targets) in enumerate(self.train_gen):
             # Training step
             inputs, targets = inputs.to(self.device), targets.to(self.device)
@@ -198,7 +203,7 @@ class NeuralNet:
             correct += predicted.eq(targets).sum().item()
 
             if VERBOSITY > 0:
-                p_bybatch.add(1, values=[("t_loss", train_loss / (batch_idx + 1)), ("t_acc", 100. * correct / total)])
+                prog_batch.add(1, values=[("t_loss", train_loss / (batch_idx + 1)), ("t_acc", 100. * correct / total)])
 
         total_acc = 100. * correct / total
         count = f'{correct}/{total}'
