@@ -89,19 +89,19 @@ class ResNet(nn.Module):
         return out
 
 
-def ResNet18():
+def ResNet18(*_):
     return ResNet(BasicBlock, [2,2,2,2])
 
-def ResNet34():
+def ResNet34(*_):
     return ResNet(BasicBlock, [3,4,6,3])
 
-def ResNet50():
+def ResNet50(*_):
     return ResNet(Bottleneck, [3,4,6,3])
 
-def ResNet101():
+def ResNet101(*_):
     return ResNet(Bottleneck, [3,4,23,3])
 
-def ResNet152():
+def ResNet152(*_):
     return ResNet(Bottleneck, [3,8,36,3])
 
 

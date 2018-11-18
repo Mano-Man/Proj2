@@ -177,7 +177,7 @@ class Progbar(object):
 
 def banner(text, ch='=', length=78):
     spaced_text = ' %s ' % text
-    print(spaced_text.center(length, ch))
+    print('\n',spaced_text.center(length, ch))
 
 def format_seconds(seconds):
     days = int(seconds / 3600/24)

@@ -20,34 +20,32 @@ from models.resnet_spatial import ResNet18Spatial
 # from pickle import load, dump
 
 import os
+import glob
 from util.data_import import CIFAR10_Train, CIFAR10_Test
 from util.gen import Progbar, banner
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
+# Global Adjustments:
+NET = ResNet18Spatial   # ResNet18 ResNet18Spatial, Data is currently hard-coded
 
+# Verbosity Adjustments:
 VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
+DO_DOWNLOAD = False
 
-RESUME_CHECKPOINT = True
+# Train Adjustments
 N_EPOCHS = 1
 LEARN_RATE = 0.01
 BATCH_SIZE = 128
+# TODO - Write a learning step decrease functionality
 TRAIN_SET_SIZE = 10000  # Max 50000
-LOAD_FILE_NAME = 'ckpt.t7'
 
-# Spatial Net Test:
-patch_size = 2
-cuda0 = torch.device('cuda:0')
-sp0 = (patch_size, torch.ones([64, 32, 32],device=cuda0))
-sp1 = (patch_size, torch.ones([64, 32, 32],device=cuda0))
-sp2 = (patch_size, torch.ones([128, 16, 16],device=cuda0))
-sp3 = (patch_size, torch.ones([256, 8, 8],device=cuda0))
-sp4 = (patch_size, torch.ones([512, 4, 4],device=cuda0))
-sp_list = [sp0, sp1, sp2, sp3, sp4]
-
-
-# net = ResNet18Spatial(sp_list)
+# Checkpoint Adjustments
+RESUME_CHECKPOINT = True
+RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
+CHECKPOINT_DIR = './data/checkpoint/'
+DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -55,7 +53,7 @@ sp_list = [sp0, sp1, sp2, sp3, sp4]
 def main():
     nn = NeuralNet()
     nn.train(N_EPOCHS)
-    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE) #Check the case when we don't download! 
+    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)  # Check the case when we don't download!
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
@@ -68,51 +66,62 @@ class NeuralNet:
 
         # Decide on device:
         if torch.cuda.is_available():
-            self.device = 'cuda'
+            self.device = torch.device('cuda')
+            cudnn.benchmark = True
+            if torch.cuda.device_count() > 1:
+                print("Detected", torch.cuda.device_count(), "GPUs!")
         else:
-            self.device = 'cpu'
-            print('Warning: Found no valid GPU device - Running on CPU')
+            self.device = torch.device('cpu')
+            print('WARNING: Found no valid GPU device - Running on CPU')
 
         # Build Model:
-        print('==> Building  model..')
-
-        self.net = ResNet18Spatial(sp_list)
-        # self.net = ResNet18()
+        print(f'==> Building model {NET.__name__}')
+        self.net = NET()
+        self.net = torch.nn.DataParallel(self.net)  # Useful if you have multiple GPUs - does not hurt otherwise
         self.net = self.net.to(self.device)
-        if self.device == 'cuda':
-            self.net = torch.nn.DataParallel(self.net)
-            cudnn.benchmark = True
 
         # Build SGD Algorithm:
         self.criterion = torch.nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(self.net.parameters(), lr=LEARN_RATE, momentum=0.9, weight_decay=5e-4)
 
         if RESUME_CHECKPOINT:
-            print('==> Resuming from checkpoint')
-            assert os.path.isdir('./data/checkpoint'), 'Error: no checkpoint directory found!'
-            checkpoint = torch.load('./data/checkpoint/'+LOAD_FILE_NAME)
-            self.net.load_state_dict(checkpoint['net'])
-            self.best_val_acc = checkpoint['acc']
-            print(f'==> Loaded model with val-acc of {self.best_val_acc}')
-            self.start_epoch = checkpoint['epoch']
+            print(f'==> Resuming from checkpoint via sorting method: {RESUME_METHOD}')
+            assert os.path.isdir(CHECKPOINT_DIR), 'Error: no checkpoint directory found!'
+            if RESUME_METHOD == 'Time':
+                ck_file = self._find_latest_checkpoint()
+            elif RESUME_METHOD == 'ValAcc':
+                ck_file = self._find_top_val_acc_checkpoint()
+            else:
+                raise AssertionError
+
+            if ck_file is None:
+                print(f'Found no valid checkpoints for {NET.__name__}')
+                self.best_val_acc = 0
+                self.start_epoch = 0
+            else:
+                checkpoint = torch.load(ck_file)
+                self.net.load_state_dict(checkpoint['net'])
+                self.best_val_acc = checkpoint['acc']
+                self.start_epoch = checkpoint['epoch']
+                print(f'==> Loaded model with val-acc of {self.best_val_acc}')
+
         else:
             self.best_val_acc = 0
             self.start_epoch = 0
 
-        # Init Data:
-        self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=BATCH_SIZE, dataset_size=TRAIN_SET_SIZE)
+        self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=BATCH_SIZE, dataset_size=TRAIN_SET_SIZE,
+                                                                   download=DO_DOWNLOAD)
 
     def train(self, n_epochs):
-        if (VERBOSITY > 0):
-            p = Progbar(n_epochs)
+
+        p = Progbar(n_epochs)
         for epoch in range(self.start_epoch, self.start_epoch + n_epochs):
-            banner(f'Epoch: {epoch}')
+            if VERBOSITY > 0:
+                banner(f'Epoch: {epoch}')
             train_loss, train_acc, train_count = self._train_step()
             val_loss, val_acc, val_count = self.test(self.val_gen)
+            p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
             self._checkpoint(val_acc, epoch + 1)
-            if (VERBOSITY > 0):
-                p.add(1,
-                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
         banner('Training Phase - End')
 
     def test(self, data_gen):
@@ -141,18 +150,29 @@ class NeuralNet:
 
         return test_loss, test_acc, count
 
-    def _checkpoint(self, acc, epoch):
-        if acc > self.best_val_acc:
-            print(f'Beat val_acc record of {self.best_val_acc} with {acc} - Saving checkpoint')
+    def _checkpoint(self, val_acc, epoch):
+
+        # Decide on whether to checkpoint or not:
+        save_it = val_acc > self.best_val_acc
+        if save_it and DONT_SAVE_REDUNDANT:
+            checkpoints = [os.path.basename(f) for f in glob.glob(f'{CHECKPOINT_DIR}{NET.__name__}_*_ckpt.t7')]
+            if checkpoints:
+                best_cp_val_acc = max([float(f.replace(NET.__name__, '').split('_')[1]) for f in checkpoints])
+                if best_cp_val_acc >= val_acc:
+                    save_it = False
+                    print(f'Resuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
+        # Do checkpoint
+        if save_it:
+            print(f'\nBeat val_acc record of {self.best_val_acc} with {val_acc} - Saving checkpoint')
             state = {
                 'net': self.net.state_dict(),
-                'acc': acc,
+                'acc': val_acc,
                 'epoch': epoch,
             }
-            if not os.path.isdir('./data/checkpoint'):
-                os.mkdir('./data/checkpoint')
-            torch.save(state, './data/checkpoint/ckpt.t7')
-            self.best_acc = acc
+            if not os.path.isdir(CHECKPOINT_DIR):
+                os.mkdir(CHECKPOINT_DIR)
+            torch.save(state, f'{CHECKPOINT_DIR}{NET.__name__}_{val_acc}_ckpt.t7')
+            self.best_val_acc = val_acc
 
     def _train_step(self):
         self.net.train()
@@ -160,7 +180,8 @@ class NeuralNet:
         correct = 0
         total = 0
 
-        epoch_progress = Progbar(len(self.train_gen))
+        if VERBOSITY > 0:
+            p_bybatch = Progbar(len(self.train_gen))
         for batch_idx, (inputs, targets) in enumerate(self.train_gen):
             # Training step
             inputs, targets = inputs.to(self.device), targets.to(self.device)
@@ -176,11 +197,34 @@ class NeuralNet:
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            epoch_progress.add(1, values=[("t_loss", train_loss / (batch_idx + 1)), ("t_acc", 100. * correct / total)])
+            if VERBOSITY > 0:
+                p_bybatch.add(1, values=[("t_loss", train_loss / (batch_idx + 1)), ("t_acc", 100. * correct / total)])
 
         total_acc = 100. * correct / total
         count = f'{correct}/{total}'
         return train_loss, total_acc, count
+
+    @staticmethod
+    def _find_top_val_acc_checkpoint():
+
+        checkpoints = [os.path.basename(f) for f in glob.glob(f'{CHECKPOINT_DIR}{NET.__name__}_*_ckpt.t7')]
+        if not checkpoints:
+            return None
+        else:
+            checkpoints.sort(key=lambda x: x.replace(NET.__name__, '').split('_')[1])
+            # print(checkpoints)
+            return CHECKPOINT_DIR + checkpoints[-1]
+
+    @staticmethod
+    def _find_latest_checkpoint():
+
+        checkpoints = glob.glob(f'{CHECKPOINT_DIR}{NET.__name__}_*_ckpt.t7')
+        if not checkpoints:
+            return None
+        else:
+            checkpoints.sort(key=os.path.getmtime)
+            # print(checkpoints)
+            return checkpoints[-1]
 
 
 if __name__ == '__main__':
