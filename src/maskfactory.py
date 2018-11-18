@@ -50,10 +50,10 @@ def uniform_mask2d(N, M, patch_size, min_ones, max_ones):
         
 def uniform_all(C,N, M, patch_size, min_ones, max_ones):
     for filt in uniform_mask2d(N, M, patch_size, min_ones, max_ones):
-        yield np.repeat(filt[:, :, np.newaxis],C,axis=2)
+        yield np.repeat(filt[np.newaxis, :, :],C,axis=0)
         
 def uniform_layer(C, mask2d):
-    return np.repeat(mask2d[:, :, np.newaxis],C,axis=2)
+    return np.repeat(mask2d[np.newaxis, :, :],C,axis=0)
         
 def random_varied_mask(N, M, patch_size, min_ones, max_ones):
     patch_n = math.ceil(N/patch_size)
@@ -100,7 +100,7 @@ def change_one_patch2d(mask, patch_n, patch_m, patch_size, p):
     return mask
     
 def change_one_patch3d(mask, patch_n, patch_m, patch_size, p, c):
-    mask[patch_n*patch_size:patch_n*patch_size+patch_size, patch_m*patch_size:patch_m*patch_size+patch_size, c] = p
+    mask[c, patch_n*patch_size:patch_n*patch_size+patch_size, patch_m*patch_size:patch_m*patch_size+patch_size] = p
     return mask
     
         
@@ -114,15 +114,21 @@ def one_patch_diff2d(N, M, patch_size, min_ones, max_ones):
                 yield change_one_patch2d(mask, ii, jj, patch_size, p)
                 
     
-def one_patch_diff3d(C, N, M, patch_size, min_ones, max_ones):
-    patch_n = math.ceil(N/patch_size)
-    patch_m = math.ceil(M/patch_size)
-    for p in patches(patch_size, min_ones, max_ones):
+def one_patch_diff3d(C, N, M, patch_size, min_ones, max_ones, max_gra):
+    #patches = all_patches_array(patch_size, min_ones, max_ones)
+    granularity = (N*M)/(patch_size*patch_size)
+    new_patch_size = patch_size
+    while granularity > max_gra:
+        new_patch_size += patch_size
+        granularity = (N*M)/(new_patch_size*new_patch_size)
+    patch_n = math.ceil(N/new_patch_size)
+    patch_m = math.ceil(M/new_patch_size)
+    for p in uniform_mask2d(new_patch_size, new_patch_size, patch_size, min_ones, max_ones): 
         for cc in range(C):
             for ii in range(patch_n):
                 for jj in range(patch_m):
-                    mask = np.ones((patch_n*patch_size,patch_m*patch_size, C))
-                    yield change_one_patch3d(mask, ii, jj, patch_size, p, cc)
+                    mask = np.ones((C, patch_n*new_patch_size,patch_m*new_patch_size))
+                    yield change_one_patch3d(mask, ii, jj, new_patch_size, p, cc)
                 
 def one_patch_diff3d_uniform_filters(C, N, M, patch_size, min_ones, max_ones):
     for mask2d in one_patch_diff2d(N, M, patch_size, min_ones, max_ones):
@@ -133,17 +139,28 @@ def one_patch_diff3d_uniform_patch(C, N, M, patch_size, min_ones, max_ones):
     patch_m = math.ceil(M/patch_size)
     for mask2d in uniform_mask2d(N, M, patch_size, min_ones, max_ones):
         for cc in range(C):
-            mask = np.ones((patch_n*patch_size,patch_m*patch_size, C))
-            mask[:,:,cc] = mask2d
+            mask = np.ones((C, patch_n*patch_size,patch_m*patch_size))
+            mask[cc,:,:] = mask2d
             yield mask
-                
-    
-        
+            
+def gen_masks(patch_size,min_ones,max_ones, mode='uniform_filters', max_gra = 100, net='ResNet18',data='CIFAR10'):
+    layer_layout = [(64, 32, 32),(64, 32, 32), (128, 16, 16), (256, 8, 8), (512, 4, 4)]
+    #l_idx = -1;   
+    for C, N, M in  layer_layout:
+        #l_idx += 1
+        if mode == 'uniform_filters':
+            yield one_patch_diff3d_uniform_filters(C, N, M, patch_size, min_ones, max_ones)
+        elif mode == 'uniform_patch':
+            yield one_patch_diff3d_uniform_patch(C, N, M, patch_size, min_ones, max_ones)
+        else: #mode=='max_granularity'
+            yield one_patch_diff3d(C, N, M, patch_size, min_ones, max_ones, max_gra)
+           
         
     
 
 count =0
 mask = 0
-for m in one_patch_diff3d_uniform_patch(64, 32, 32, 2, 2, 3):
+#(C,N, M, patch_size, min_ones, max_ones):
+for m in uniform_all(64, 32, 32, 2, 2, 3):
     mask = m
     count = count + 1

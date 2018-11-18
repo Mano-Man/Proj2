@@ -12,7 +12,9 @@ import torchvision
 import torchvision.transforms as transforms
 from torchsummary import summary
 
-from models.resnet_spatial_new import ResNet18Spatial
+from models.resnet_spatial import ResNet18Spatial
+from models.resnet_spatial import expand_mat
+from models.resnet_spatial import expand_mat_gpu
 
 
 if __name__ == "__main__":
@@ -47,12 +49,6 @@ if __name__ == "__main__":
         
     # Model
     print('==> Building model..')
-#mask sizes for sp_i:
-#   sp0[1].shape =  (64, 32, 32)
-#   sp1[1].shape =  (64, 32, 32)
-#   sp2[1].shape =  (128, 16, 16)
-#   sp3[1].shape = (256, 8, 8)
-#   sp4[1].shape = (512, 4, 4)
     patch_size = 2
     sp0 = (patch_size, torch.ones(64, 32, 32))
     sp1 = (patch_size, torch.ones(64, 32, 32))
@@ -61,9 +57,15 @@ if __name__ == "__main__":
     sp4 = (patch_size, torch.ones(512, 4, 4))
     sp_list = [sp0, sp1, sp2, sp3, sp4]
 
-    net = ResNet18Spatial(sp_list)
+    net = ResNet18Spatial(sp_list, pretrained=True)
 
     print(net)
     summary(net, (3, 32, 32))
     print('==> model built..')
+    
+#    a = torch.Tensor([[0, 1, 0], [1, 0, 1],[1,1,1]])
+#    ex = a.unsqueeze(0).repeat(3, 1, 1)
+#    ex = a.unsqueeze(0).repeat(2, 3, 1, 1)
+#    a_exp = expand_mat(ex, 2, 4)
+#    a_exp_gpu = expand_mat_gpu(ex, 2, 4)
     

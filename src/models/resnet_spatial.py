@@ -9,25 +9,17 @@ Reference:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
 import numpy as np
 
-model_urls = {
-    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
-    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
-    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
-    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-}
+module_path = r'./checkpoint/pre_trained.t7'
 
-
-def expand_mat(x, s, p):
+def expand_mat(x, patch_size, final_size):
     x_cpu = x.cpu()
     x_numpy = x_cpu.data.numpy()
-    x_numpy = x_numpy.repeat(s, 2).repeat(s, 3)  # faster than kron
-    x_mask = torch.cuda.FloatTensor(x_numpy)
+    x_numpy = x_numpy.repeat(patch_size, 2).repeat(patch_size, 3)  # faster than kron
+    x_mask = torch.FloatTensor(x_numpy)
 
-    pad_s = p - x_mask.size(3)
+    pad_s = final_size - x_mask.size(3)
     if pad_s > 0:
         x_mask = torch.nn.functional.pad(x_mask, (0, pad_s, 0, pad_s), value=1)
         assert (1 == 0)  # in this implementation I should be here
@@ -35,6 +27,16 @@ def expand_mat(x, s, p):
     if torch.cuda.is_available():
         x_mask = x_mask.cuda()
 
+    return x_mask
+
+def expand_mat_gpu(x, p_size, final_size):
+    x_mask = x.repeat(1,1,p_size,p_size).reshape(x.size(0), x.size(1), p_size, -1).permute(0,1,3,2).reshape(x.size(0), x.size(1), x.size(2)*p_size,-1)
+    
+    pad_s = final_size - x_mask.size(3)
+    if pad_s > 0:
+        x_mask = torch.nn.functional.pad(x_mask, (0, pad_s, 0, pad_s), value=1)
+        assert (1 == 0)  # in this implementation I should be here
+    
     return x_mask
 
 
@@ -78,7 +80,7 @@ class spatial_new(nn.Module):
         pred_mask_sq = pred_mask_sq > 0
 
         # expand
-        pred_mask_ex = expand_mat(pred_mask_sq, self.filt_size, x.size(3))
+        pred_mask_ex = expand_mat_gpu(pred_mask_sq, self.filt_size, x.size(3))
         assert (pred_mask_ex.size(2) == (x.size(2) + pad_s))
         pred_mask_ex = pred_mask_ex[:, :, 0:x.size(2), 0:x.size(3)]
 
@@ -179,7 +181,11 @@ def ResNet18Spatial(sp_list, pretrained=False, **kwargs):
         p.requires_grad = False
     for p in model.layer4[1].pred.conv_filt.parameters():
         p.requires_grad = False
+        
+    device0 = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    # if pretrained:
-    #   model.load_state_dict(model_zoo.load_url(model_urls['resnet18']), False)
+    if pretrained:
+       checkpoint = torch.load(module_path, map_location=device0)
+       model.load_state_dict(checkpoint['net'])
+       
     return model
