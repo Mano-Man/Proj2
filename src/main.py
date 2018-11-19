@@ -32,20 +32,28 @@ NET = ResNet18Spatial   # ResNet18 ResNet18Spatial, Data is currently hard-coded
 
 # Verbosity Adjustments:
 VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
-DO_DOWNLOAD = False
+DO_DOWNLOAD = True
 
 # Train Adjustments
-N_EPOCHS = 1
-LEARN_RATE = 0.01
+N_EPOCHS = 100
+LEARN_RATE = 0.1
 BATCH_SIZE = 128
 # TODO - Write a learning step decrease functionality
-TRAIN_SET_SIZE = 10000  # Max 50000
+TRAIN_SET_SIZE = 50000  # Max 50000
 
 # Checkpoint Adjustments
 RESUME_CHECKPOINT = False
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
 CHECKPOINT_DIR = './data/checkpoint/'
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
+SP_LIST = [(1, 2, torch.ones([64, 32, 32])),
+           (1, 2, torch.ones([64, 32, 32])),
+           (1, 2, torch.ones([128, 16, 16])),
+           (1, 2, torch.ones([256, 8, 8])),
+           (1, 2, torch.ones([512, 4, 4]))]
+
+SP_LIST_DISABLE = [(0, 0, 0)]*5
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -79,7 +87,7 @@ class NeuralNet:
 
         # Build Model:
         print(f'==> Building model {NET.__name__}')
-        self.net = NET()
+        self.net = NET(SP_LIST)
 
         if RESUME_CHECKPOINT:
             print(f'==> Resuming from checkpoint via sorting method: {RESUME_METHOD}')

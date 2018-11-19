@@ -4,20 +4,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as tf
-
-ps = 2
-SP_LIST = [(1, ps, torch.ones([64, 32, 32])),
-           (1, ps, torch.ones([64, 32, 32])),
-           (1, ps, torch.ones([128, 16, 16])),
-           (1, ps, torch.ones([256, 8, 8])),
-           (1, ps, torch.ones([512, 4, 4]))]
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    NN Configurations
 # ----------------------------------------------------------------------------------------------------------------------
-def ResNet18Spatial(**kwargs):
-    model = ResNetS(BasicBlockS, [2, 2, 2, 2], **kwargs)
+def ResNet18Spatial(sp_list, pretrained=False,path = '', **kwargs):
+    model = ResNetS(BasicBlockS, [2, 2, 2, 2], sp_list, **kwargs)
+    if pretrained:
+        checkpoint = torch.load(path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
+        model.load_state_dict(checkpoint['net'])
     return model
 
 
@@ -132,17 +126,17 @@ class Spatial(nn.Module):
 #                                                    NN Base
 # ----------------------------------------------------------------------------------------------------------------------
 class ResNetS(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, sp_list, num_classes=10):
         super(ResNetS, self).__init__()
 
         self.in_planes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
-        self.pred = Spatial(64, SP_LIST[0])
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], SP_LIST[1], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], SP_LIST[2], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], SP_LIST[3], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], SP_LIST[4], stride=2)
+        self.pred = Spatial(64, sp_list[0])
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], sp_list[1], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], sp_list[2], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], sp_list[3], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], sp_list[4], stride=2)
         self.linear = nn.Linear(512 * block.expansion, num_classes)
 
     def forward(self, x):
