@@ -7,12 +7,8 @@ import torch.nn.functional as tf
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    NN Configurations
 # ----------------------------------------------------------------------------------------------------------------------
-def ResNet18Spatial(sp_list, pretrained=False,path = '', **kwargs):
-    model = ResNetS(BasicBlockS, [2, 2, 2, 2], sp_list, **kwargs)
-    if pretrained:
-        checkpoint = torch.load(path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-        model.load_state_dict(checkpoint['net'])
-    return model
+def ResNet18Spatial(sp_list, **kwargs):
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], sp_list, **kwargs)
 
 
 def ResNet34(**kwargs):
@@ -27,22 +23,20 @@ class Spatial(nn.Module):
     def __init__(self, channels, spatial_params):
         super(Spatial, self).__init__()
 
-        self.enable = spatial_params[0]
-        if self.enable:
-            _, self.filt_size, self.mask = spatial_params  # Presuming square filter
+        self.enable, self.filt_size, self.mask = spatial_params  # Presuming square filter
 
-            self.conv_filt = nn.Conv2d(channels, channels, kernel_size=self.filt_size, stride=self.filt_size,
-                                       bias=False)
-            self.conv_filt.weight.data.fill_(1)
-            self.ops_saved = 0
-            self.total_ops = 0
+        self.conv_filt = nn.Conv2d(channels, channels, kernel_size=self.filt_size, stride=self.filt_size,
+                                   bias=False)
+        self.conv_filt.weight.data.fill_(1)
+        self.ops_saved = 0
+        self.total_ops = 0
 
-            # Make convolution later constant on backward passes
-            for p in self.conv_filt.parameters():
-                p.requires_grad = False
+        # Make convolution later constant on backward passes
+        for p in self.conv_filt.parameters():
+            p.requires_grad = False
 
-            if torch.cuda.is_available():  # Will not work for Multiple GPUs
-                self.mask = self.mask.cuda()
+        if torch.cuda.is_available():  # Will not work for Multiple GPUs
+            self.mask = self.mask.cuda()
 
     def forward(self, x):
 
@@ -160,6 +154,21 @@ class ResNetS(nn.Module):
             layers.append(block(self.in_planes, planes, spatial_params, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
+    
+    def no_of_operations(self):
+        ops_saved = self.pred.ops_saved + self.layer1[0].pred.ops_saved + self.layer1[1].pred.ops_saved \
+                                        + self.layer2[0].pred.ops_saved + self.layer2[1].pred.ops_saved \
+                                        + self.layer3[0].pred.ops_saved + self.layer3[1].pred.ops_saved \
+                                        + self.layer4[0].pred.ops_saved + self.layer4[1].pred.ops_saved
+                                        
+        total_ops = self.pred.total_ops + self.layer1[0].pred.total_ops + self.layer1[1].pred.total_ops \
+                                        + self.layer2[0].pred.total_ops + self.layer2[1].pred.total_ops \
+                                        + self.layer3[0].pred.total_ops + self.layer3[1].pred.total_ops \
+                                        + self.layer4[0].pred.total_ops + self.layer4[1].pred.total_ops
+        
+        return ops_saved, total_ops
+        
+        
 
 
 class BasicBlockS(nn.Module):

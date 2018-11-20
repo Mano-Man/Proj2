@@ -24,6 +24,9 @@ import glob
 from util.data_import import CIFAR10_Train, CIFAR10_Test
 from util.gen import Progbar, banner
 
+import Record as rc
+import maskfactory as mf
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -35,42 +38,91 @@ VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
 DO_DOWNLOAD = True
 
 # Train Adjustments
-N_EPOCHS = 100
+N_EPOCHS = 30
 LEARN_RATE = 0.1
 BATCH_SIZE = 128
 # TODO - Write a learning step decrease functionality
 TRAIN_SET_SIZE = 50000  # Max 50000
 
 # Checkpoint Adjustments
-RESUME_CHECKPOINT = False
+RESUME_CHECKPOINT = True
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
-CHECKPOINT_DIR = './data/checkpoint/'
+CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
+RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
-SP_LIST = [(1, 2, torch.ones([64, 32, 32])),
-           (1, 2, torch.ones([64, 32, 32])),
-           (1, 2, torch.ones([128, 16, 16])),
-           (1, 2, torch.ones([256, 8, 8])),
-           (1, 2, torch.ones([512, 4, 4]))]
 
-SP_LIST_DISABLE = [(0, 0, 0)]*5
 
+#SP_LIST = [(1, PATCH_SIZE, torch.ones([64, 32, 32])),
+#           (1, PATCH_SIZE, torch.ones([64, 32, 32])),
+#           (1, PATCH_SIZE, torch.ones([128, 16, 16])),
+#           (1, PATCH_SIZE, torch.ones([256, 8, 8])),
+#           (1, PATCH_SIZE, torch.ones([512, 4, 4]))]
+
+
+
+PATCH_SIZE = 2
+MAX_GRA = 32*32
+GENERATE_PATTERNS = True
+MIN_ONES = 2
+MAX_ONES = 3
+LAYER_LAYOUT = rc.Resnet18_layers_layout
+MODE = rc.uniform_filters
+SP_LIST_DISABLE = [(0, PATCH_SIZE, torch.zeros(0))]*len(LAYER_LAYOUT)
+SAVE_INTERVAL = 10
+RESUME_MASK_GEN = False
+RECORDS_FILENAME = ''
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
-def main():
-    nn = NeuralNet()
+def training_main():
+    nn = NeuralNet(SP_LIST_DISABLE)
     nn.train(N_EPOCHS)
     test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)  # Check the case when we don't download!
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
-
+def main():
+    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)
+    nn = NeuralNet(SP_LIST_DISABLE)
+    test_loss, initial_acc, count = nn.test(test_gen)
+    print(f'=====>  loaded model results: initial acc {initial_acc:.3f} with {count}, initial loss: {test_loss:.3f}')
+    if RESUME_MASK_GEN:
+        records = rc.load_from_file(RECORDS_FILENAME, path=RESULTS_DIR)
+        st_point = records.find_resume_point()
+    else:
+        records = rc.Record(LAYER_LAYOUT,MAX_GRA,GENERATE_PATTERNS, MODE,initial_acc, \
+                        PATCH_SIZE,MIN_ONES,MAX_ONES)
+        st_point = [0]*4
+    print('=====> result will be saved to ' + os.path.join(RESULTS_DIR, records.filename))
+    save_counter = 0
+    for layer, channel, patch, pattern_idx, mask in mf.gen_masks_with_resume(PATCH_SIZE,  \
+                                                                             records.all_patterns, \
+                                                                             records.mode, \
+                                                                             records.max_gra, \
+                                                                             LAYER_LAYOUT, \
+                                                                             resume_params=st_point):
+        sp_list = [(0, PATCH_SIZE, torch.zeros(0))]*len(LAYER_LAYOUT)
+        sp_list[layer] = (1, PATCH_SIZE, torch.from_numpy(mask))
+        nn = NeuralNet(sp_list)
+        test_loss, test_acc, count = nn.test(test_gen)
+        ops_saved, ops_total = nn.net.no_of_operations()
+        records.addRecord(ops_saved, ops_total, test_acc, layer, channel, patch, pattern_idx)
+        
+        save_counter += 1
+        if save_counter > SAVE_INTERVAL:
+            rc.save_to_file(records, True, RESULTS_DIR)
+            save_counter = 0
+            
+    rc.save_to_file(records, True, RESULTS_DIR)
+    records.save_to_csv(RESULTS_DIR)
+    print('=====> result saved to ' + os.path.join(RESULTS_DIR, records.filename))    
+    
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
 class NeuralNet:
-    def __init__(self):
+    def __init__(self, sp_list):
 
         # Decide on device:
         if torch.cuda.is_available():
@@ -87,7 +139,7 @@ class NeuralNet:
 
         # Build Model:
         print(f'==> Building model {NET.__name__}')
-        self.net = NET(SP_LIST)
+        self.net = NET(sp_list)
 
         if RESUME_CHECKPOINT:
             print(f'==> Resuming from checkpoint via sorting method: {RESUME_METHOD}')
