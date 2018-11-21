@@ -116,7 +116,7 @@ class Record():
                 for patch_idx in range(self.no_of_patches[layer]):
                     for pattern_idx in range(self.all_patterns.shape[2]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
-                            return layer, channel, patch_idx, pattern_idx
+                            return [layer, channel, patch_idx, pattern_idx]
         
     def save_to_csv(self, path = './data/results'):
         out_path = os.path.join(path, self.filename + ".csv")
