@@ -14,8 +14,9 @@ import csv
 
 Resnet18_layers_layout = [(64, 32, 32),(64, 32, 32), (128, 16, 16), (256, 8, 8), (512, 4, 4)]
 max_granularity = 0
-uniform_filters = 1
+uniform_filters = 1 
 uniform_patch = 2
+uniform_layer = 3
 
 def bitmasks(n,m):
     if m < n:
@@ -29,15 +30,15 @@ def bitmasks(n,m):
     else:
         yield n * bitarray('1')
         
-def patches(patch_size, min_ones, max_ones):
+def patches(patch_size, min_ones, max_ones, mask_type=np.float32):
     n = patch_size*patch_size
     for m in range(min_ones, max_ones):
         for patch in bitmasks(n,m):
-            yield np.array(patch, dtype=int).reshape((patch_size,patch_size))
+            yield np.array(patch, dtype=mask_type).reshape((patch_size,patch_size))
             
-def all_patches_array(patch_size, min_ones, max_ones):
-    all_patches = np.zeros((patch_size,patch_size,1))
-    for p in patches(patch_size, min_ones, max_ones):
+def all_patches_array(patch_size, min_ones, max_ones, mask_type=np.float32):
+    all_patches = np.zeros((patch_size,patch_size,1), dtype= mask_type)
+    for p in patches(patch_size, min_ones, max_ones, mask_type):
         all_patches = np.append(all_patches,p[:, :, np.newaxis], axis=2)
     return all_patches[:,:,1:]
 
@@ -74,6 +75,10 @@ class Record():
         elif mode == uniform_patch:
            self.no_of_patches = [1]*self.no_of_layers
            self.filename = 'uniform_patch_'
+        elif mode == uniform_layer:
+            self.no_of_channels = [1]*self.no_of_layers
+            self.no_of_patches = [1]*self.no_of_layers
+            self.filename = 'uniform_layer_'
         else:
            self.filename = 'max_granularity_'
            
@@ -98,6 +103,10 @@ class Record():
            channel = 0
         elif self.mode == uniform_patch:
            patch_idx = 0
+        elif self.mode == uniform_layer:
+            channel = 0
+            patch_idx = 0
+            
          
         self.results[layer][channel][patch_idx][pattern_idx] = (op,tot_op,acc)
     
@@ -109,7 +118,7 @@ class Record():
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return layer, channel, patch_idx, pattern_idx
         
-    def save_to_csv(self, path = './results'):
+    def save_to_csv(self, path = './data/results'):
         out_path = os.path.join(path, self.filename + ".csv")
         with open(out_path, 'w', newline='') as f:
             csv.writer(f).writerow(['layer', 'channel', 'patch number', 'pattern number', 'operations saved', 'total operations','accuracy'])
@@ -158,5 +167,5 @@ def load_from_file(filename, path='./data/results'):
 #           
 #save_to_file(r2)
 #r3 = load_from_file('uniform_filters_1542549224_mg1024') 
-#assert(r2.results ==r3.results)         
-    
+#assert(r2.results ==r3.results)   
+

@@ -30,9 +30,9 @@ def uniform_mask2d(N, M, patch_size, patterns, p_start=0):
     for p_idx in range(p_start, patterns.shape[2]):
         yield p_idx, np.tile(patterns[:,:,p_idx], (N,M))
         
-def uniform_all(C,N, M, patch_size, min_ones, max_ones):
-    for filt in uniform_mask2d(N, M, patch_size, min_ones, max_ones):
-        yield np.repeat(filt[np.newaxis, :, :],C,axis=0)
+def uniform_all(C,N, M, patch_size, patterns,  p_start=0):
+    for p_idx, filt in uniform_mask2d(N, M, patch_size, patterns, p_start):
+        yield p_idx, np.repeat(filt[np.newaxis, :, :],C,axis=0)
         
 def uniform_layer(C, mask2d):
     return np.repeat(mask2d[np.newaxis, :, :],C,axis=0)
@@ -160,6 +160,10 @@ def gen_masks_with_resume(patch_size,patterns, mode, max_gra, layer_layout, resu
                     mask = np.ones((C, patch_n*patch_size,patch_m*patch_size) , dtype=mask_type)
                     mask[channel,:,:] = mask2d
                     yield layer, channel, 0, p_idx, mask
+        elif mode == rc.uniform_layer:
+            for p_idx, mask in uniform_all(C,N, M, patch_size, patterns,  p_start=resume_params[3]):
+                resume_params[3] = 0
+                yield layer, 0, 0, p_idx, mask
         else: #mode=='max_granularity'
             new_patch_size = rc.actual_patch_size(N, M, patch_size, max_gra)
             patch_n = math.ceil(N/new_patch_size)
@@ -188,7 +192,7 @@ def gen_masks_with_resume(patch_size,patterns, mode, max_gra, layer_layout, resu
 #device0 = 'cuda' if torch.cuda.is_available() else 'cpu'
 #for C, N, M in  layer_layout:
 #    sp_list.append((patch_size, torch.ones([C,N,M],device=device0)))
-#records = rc.Record(layer_layout,32*32,True, rc.uniform_filters,2,2,3)
+#records = rc.Record(layer_layout,32*32,True, rc.uniform_layer,93.44,2,2,3)
 #gen = gen_masks_with_resume(patch_size, records.all_patterns, records.mode, \
-#                    records.max_gra,layer_layout, [1,2,2,3])
+#                    records.max_gra,layer_layout)
 #layer, channel, patch, pattern_idx, mask = next(gen)

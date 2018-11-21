@@ -49,6 +49,8 @@ RESUME_CHECKPOINT = True
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
 CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
 RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
+#CHECKPOINT_DIR = './data/checkpoint/'
+#RESULTS_DIR = './data/results/'
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
 
 
@@ -63,12 +65,12 @@ DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than
 PATCH_SIZE = 2
 MAX_GRA = 32*32
 GENERATE_PATTERNS = True
-MIN_ONES = 2
-MAX_ONES = 3
+MIN_ONES = 1
+MAX_ONES = MIN_ONES + 1
 LAYER_LAYOUT = rc.Resnet18_layers_layout
-MODE = rc.uniform_filters
+MODE = rc.uniform_layer
 SP_LIST_DISABLE = [(0, PATCH_SIZE, torch.zeros(0))]*len(LAYER_LAYOUT)
-SAVE_INTERVAL = 10
+SAVE_INTERVAL = 100
 RESUME_MASK_GEN = False
 RECORDS_FILENAME = ''
 
@@ -94,7 +96,20 @@ def main():
         records = rc.Record(LAYER_LAYOUT,MAX_GRA,GENERATE_PATTERNS, MODE,initial_acc, \
                         PATCH_SIZE,MIN_ONES,MAX_ONES)
         st_point = [0]*4
+    records.filename = 'ps'+str(PATCH_SIZE)+'_ones'+ str(MIN_ONES)+'_'+records.filename
     print('=====> result will be saved to ' + os.path.join(RESULTS_DIR, records.filename))
+    
+    #test ----------------------------------
+#    sp_list = [(1, PATCH_SIZE, torch.zeros([64, 32, 32])),
+#           (1, PATCH_SIZE, torch.zeros([64, 32, 32])),
+#           (1, PATCH_SIZE, torch.zeros([128, 16, 16])),
+#           (1, PATCH_SIZE, torch.zeros([256, 8, 8])),
+#           (1, PATCH_SIZE, torch.zeros([512, 4, 4]))]
+#    nn = NeuralNet(sp_list)
+#    test_loss, test_acc, count = nn.test(test_gen)
+#    ops_saved, ops_total = nn.net.no_of_operations()
+#    records.addRecord(ops_saved.item(), ops_total, test_acc, 0, 0, 0, 0)
+    
     save_counter = 0
     for layer, channel, patch, pattern_idx, mask in mf.gen_masks_with_resume(PATCH_SIZE,  \
                                                                              records.all_patterns, \
@@ -107,7 +122,7 @@ def main():
         nn = NeuralNet(sp_list)
         test_loss, test_acc, count = nn.test(test_gen)
         ops_saved, ops_total = nn.net.no_of_operations()
-        records.addRecord(ops_saved, ops_total, test_acc, layer, channel, patch, pattern_idx)
+        records.addRecord(ops_saved.item(), ops_total, test_acc, layer, channel, patch, pattern_idx)
         
         save_counter += 1
         if save_counter > SAVE_INTERVAL:
@@ -156,7 +171,7 @@ class NeuralNet:
                 self.best_val_acc = 0
                 self.start_epoch = 0
             else:
-                checkpoint = torch.load(ck_file)
+                checkpoint = torch.load(ck_file, map_location=self.device)
                 self.net.load_state_dict(checkpoint['net'])
                 self.best_val_acc = checkpoint['acc']
                 self.start_epoch = checkpoint['epoch']
