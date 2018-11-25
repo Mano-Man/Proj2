@@ -57,3 +57,20 @@ class Optimizer:
 
 if __name__ == '__main__':
     main()
+
+
+class PatchQuantizier:
+
+	# l = Layer, c = Channel, p = Patch, m = Mask 
+	# input: in[l][c][p][m] = (ops,acc,mask_id)
+	#        mask_dict[mask_id] = mask  
+	def __init__(self):
+		pass
+
+	def __str__(self):
+		pass 
+		# Defines a unique string that identifies the state, which will be saved to the pickle file 
+
+	def simulate():
+		pass 
+
