@@ -138,6 +138,22 @@ class Record():
                                 csv.writer(f).writerow([l, k, j, i, self.results[l][k][j][i][0], \
                                                         self.results[l][k][j][i][1], \
                                                         self.results[l][k][j][i][2]])
+            
+    def gen_pattern_lists(self, min_acc):
+        self.slresults = []
+        for l in range(self.no_of_layers):
+            layer = []
+            for k in range(self.no_of_channels[l]):
+                channel = []
+                for j in range(self.no_of_patches[l]):
+                    patch = []
+                    for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
+                        if res_tuple[2] > min_acc:
+                            patch.append(p_idx)
+                    patch.append(-1)
+                    channel.append(patch)
+                layer.append(channel)
+            self.slresults.append(layer)
 
 
 def save_to_file(record, use_default=True, path='./data/results', filename=''):
