@@ -9,131 +9,119 @@ import torch.backends.cudnn as cudnn
 
 # Models: (There are many more)
 from models.resnet import ResNet18
-from models.resnet_spatial import ResNet18Spatial
-# from models.googlenet import GoogleNet
-# from models.densenet import DenseNet121
-# from models.vgg import VGG  # VGG('VGG19')
+from models.resnet_spatial import ResNet18Spatial, ResNet34Spatial
 
 # Utils:
-# from run_config import RunConfig, RunDefaults
-# from tqdm import tqdm
-# from pickle import load, dump
-
+import re
 import os
 import glob
+from tqdm import tqdm
 from util.data_import import CIFAR10_Train, CIFAR10_Test
-from util.gen import Progbar, banner
+from util.gen import Progbar, banner, dict_sym_diff
 
 import Record as rc
 import maskfactory as mf
 
 # ----------------------------------------------------------------------------------------------------------------------
-#
+#                                                 Global Config
 # ----------------------------------------------------------------------------------------------------------------------
 # Global Adjustments:
-NET = ResNet18Spatial   # ResNet18 ResNet18Spatial, Data is currently hard-coded
+NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial]
+NET = NETS[1]
+BATCH_SIZE = 128
 
 # Verbosity Adjustments:
 VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
-DO_DOWNLOAD = True
-
-# Train Adjustments
-N_EPOCHS = 30
-LEARN_RATE = 0.1
-BATCH_SIZE = 64
-# TODO - Write a learning step decrease functionality
-TRAIN_SET_SIZE = 50000  # Max 50000
+DO_DOWNLOAD = False
 
 # Checkpoint Adjustments
-RESUME_CHECKPOINT = False
+RESUME_CHECKPOINT = True
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
-# CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
-# RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
-CHECKPOINT_DIR = './data/checkpoint/'
-RESULTS_DIR = './data/results/'
-DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
+CHECKPOINT_DIR = './data/checkpoint/'  # '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
+RESULTS_DIR = './data/results/'  # '/content/drive/My Drive/Colab Notebooks/data/results/'
+# ----------------------------------------------------------------------------------------------------------------------
+#                                               Spatial Functionality
+# ----------------------------------------------------------------------------------------------------------------------
+# Spatial Config
+RECORDS_FILENAME = ''
+GEN_PATTERNS = True
+ONES_RANGE = (1, 2)  # Exclusive range
 
-
-#SP_LIST = [(1, PATCH_SIZE, torch.ones([64, 32, 32])),
-#           (1, PATCH_SIZE, torch.ones([64, 32, 32])),
-#           (1, PATCH_SIZE, torch.ones([128, 16, 16])),
-#           (1, PATCH_SIZE, torch.ones([256, 8, 8])),
-#           (1, PATCH_SIZE, torch.ones([512, 4, 4]))]
-
-
-
-PATCH_SIZE = 2
-MAX_GRA = 32*32
-GENERATE_PATTERNS = True
-MIN_ONES = 4
-MAX_ONES = MIN_ONES + 1
-LAYER_LAYOUT = rc.Resnet18_layers_layout
 MODE = rc.uniform_layer
-SP_LIST_DISABLE = [(0, PATCH_SIZE, torch.zeros(0))]*len(LAYER_LAYOUT)
+LAYER_LAYOUT = rc.Resnet18_layers_layout
+PS = 2
+GRAN_THRESH = 32 * 32
+
+# Complexity Config
 SAVE_INTERVAL = 100
 RESUME_MASK_GEN = False
-RECORDS_FILENAME = ''
+
+# Dummy workloads
+SP_MOCK = [(0, 0, 0)] * len(LAYER_LAYOUT)
+SP_ZEROS = [(1, PS, torch.zeros([64, 32, 32])),
+            (1, PS, torch.zeros([64, 32, 32])),
+            (1, PS, torch.zeros([128, 16, 16])),
+            (1, PS, torch.zeros([256, 8, 8])),
+            (1, PS, torch.zeros([512, 4, 4]))]
+
+CHOSEN_SP = SP_MOCK
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                Train Functionality
+# ----------------------------------------------------------------------------------------------------------------------
+# Train Adjustments - TODO - Write a learning step decrease functionality
+N_EPOCHS = 30
+TRAIN_SET_SIZE = 50000  # Max 50000 for CIFAR10
+LEARN_RATE = 0.1
+DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
+
+def main():
+    nn = NeuralNet(CHOSEN_SP)
+    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)
+    _, test_acc, _ = nn.test(test_gen)
+    print(f'==> Asserted test-acc of: {test_acc}\n')
+
+    if RESUME_MASK_GEN:
+        rcs = rc.load_from_file(RECORDS_FILENAME, path=RESULTS_DIR)
+        st_point = rcs.find_resume_point()
+    else:
+        rcs = rc.Record(LAYER_LAYOUT, GRAN_THRESH, GEN_PATTERNS, MODE, test_acc, PS, ONES_RANGE)
+        st_point = [0] * 4
+    rcs.filename = 'ps' + str(PS) + '_ones' + str(ONES_RANGE) + '_' + rcs.filename
+
+    save_counter = 0
+    for layer, channel, patch, pattern_idx, mask in tqdm(mf.gen_masks_with_resume \
+                                                                     (PS, rcs.all_patterns, rcs.mode, rcs.gran_thresh,
+                                                                      LAYER_LAYOUT, resume_params=st_point)):
+        sp_list = SP_MOCK
+        sp_list[layer] = (1, PS, torch.from_numpy(mask))
+        nn.update_spatial(sp_list)
+        _, test_acc, _ = nn.test(test_gen)
+        ops_saved, ops_total = nn.net.num_ops()
+        rcs.addRecord(ops_saved.item(), ops_total, test_acc, layer, channel, patch, pattern_idx)
+
+        save_counter += 1
+        if save_counter > SAVE_INTERVAL:
+            rc.save_to_file(rcs, True, RESULTS_DIR)
+            save_counter = 0
+
+    rc.save_to_file(rcs, True, RESULTS_DIR)
+    rcs.save_to_csv(RESULTS_DIR)
+    print('==> Result saved to ' + os.path.join(RESULTS_DIR, rcs.filename))
+
+
 def training_main():
-    nn = NeuralNet(SP_LIST_DISABLE)
+    nn = NeuralNet(CHOSEN_SP)
     nn.train(N_EPOCHS)
-    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)  # Check the case when we don't download!
+    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
-def main():
-    test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)
-    #nn = NeuralNet(SP_LIST_DISABLE)
-    #test_loss, initial_acc, count = nn.test(test_gen)
-    #print(f'=====>  loaded model results: initial acc {initial_acc:.3f} with {count}, initial loss: {test_loss:.3f}')
-    initial_acc = 93.83
-    if RESUME_MASK_GEN:
-        records = rc.load_from_file(RECORDS_FILENAME, path=RESULTS_DIR)
-        st_point = records.find_resume_point()
-    else:
-        records = rc.Record(LAYER_LAYOUT,MAX_GRA,GENERATE_PATTERNS, MODE,initial_acc, \
-                        PATCH_SIZE,MIN_ONES,MAX_ONES)
-        st_point = [0]*4
-    records.filename = 'ps'+str(PATCH_SIZE)+'_ones'+ str(MIN_ONES)+'_'+records.filename
-    print('=====> result will be saved to ' + os.path.join(RESULTS_DIR, records.filename))
-    
-    #test ----------------------------------
-#    sp_list = [(1, PATCH_SIZE, torch.zeros([64, 32, 32])),
-#           (1, PATCH_SIZE, torch.zeros([64, 32, 32])),
-#           (1, PATCH_SIZE, torch.zeros([128, 16, 16])),
-#           (1, PATCH_SIZE, torch.zeros([256, 8, 8])),
-#           (1, PATCH_SIZE, torch.zeros([512, 4, 4]))]
-#    nn = NeuralNet(sp_list)
-#    test_loss, test_acc, count = nn.test(test_gen)
-#    ops_saved, ops_total = nn.net.no_of_operations()
-#    records.addRecord(ops_saved.item(), ops_total, test_acc, 0, 0, 0, 0)
-    
-    save_counter = 0
-    for layer, channel, patch, pattern_idx, mask in mf.gen_masks_with_resume(PATCH_SIZE,  \
-                                                                             records.all_patterns, \
-                                                                             records.mode, \
-                                                                             records.max_gra, \
-                                                                             LAYER_LAYOUT, \
-                                                                             resume_params=st_point):
-        sp_list = [(0, PATCH_SIZE, torch.zeros(0))]*len(LAYER_LAYOUT)
-        sp_list[layer] = (1, PATCH_SIZE, torch.from_numpy(mask))
-        nn = NeuralNet(sp_list)
-        test_loss, test_acc, count = nn.test(test_gen)
-        ops_saved, ops_total = nn.net.no_of_operations()
-        records.addRecord(ops_saved.item(), ops_total, test_acc, layer, channel, patch, pattern_idx)
-        
-        save_counter += 1
-        if save_counter > SAVE_INTERVAL:
-            rc.save_to_file(records, True, RESULTS_DIR)
-            save_counter = 0
-            
-    rc.save_to_file(records, True, RESULTS_DIR)
-    records.save_to_csv(RESULTS_DIR)
-    print('=====> result saved to ' + os.path.join(RESULTS_DIR, records.filename))    
-    
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -150,7 +138,7 @@ class NeuralNet:
                 # self.net = torch.nn.DataParallel(self.net)  # Useful if you have multiple GPUs - does not hurt otherwise
         else:
             self.device = torch.device('cpu')
-            #torch.set_num_threads(4) # Presuming 4 cores
+            # torch.set_num_threads(4) # Presuming 4 cores
             print('WARNING: Found no valid GPU device - Running on CPU')
 
         # Build Model:
@@ -173,7 +161,7 @@ class NeuralNet:
                 self.start_epoch = 0
             else:
                 checkpoint = torch.load(ck_file, map_location=self.device)
-                self.net.load_state_dict(checkpoint['net'])
+                self._load_checkpoint(checkpoint['net'])
                 self.best_val_acc = checkpoint['acc']
                 self.start_epoch = checkpoint['epoch']
                 print(f'==> Loaded model with val-acc of {self.best_val_acc}')
@@ -182,19 +170,27 @@ class NeuralNet:
             self.best_val_acc = 0
             self.start_epoch = 0
 
-
         self.net = self.net.to(self.device)
 
         # Build SGD Algorithm:
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=LEARN_RATE, momentum=0.9, weight_decay=5e-4)
+        self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=LEARN_RATE,
+                                   momentum=0.9, weight_decay=5e-4)
+
+    def update_spatial(self, sp_list):
+        old_state = self.net.state_dict()
+        self.net = NET(sp_list)  # TODO: This update can be done without a full reconstruction
+        self.net.load_state_dict(old_state,strict=False)
+        self.net = self.net.to(self.device)
+        self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=LEARN_RATE,
+                                   momentum=0.9, weight_decay=5e-4)
+        return self
+
+    def train(self, n_epochs):
 
         # Bring in Data
         self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=BATCH_SIZE, dataset_size=TRAIN_SET_SIZE,
                                                                    download=DO_DOWNLOAD)
-
-    def train(self, n_epochs):
-
         p = Progbar(n_epochs)
         for epoch in range(self.start_epoch, self.start_epoch + n_epochs):
             if VERBOSITY > 0:
@@ -284,6 +280,33 @@ class NeuralNet:
         total_acc = 100. * correct / total
         count = f'{correct}/{total}'
         return train_loss, total_acc, count
+
+    def _load_checkpoint(self, loaded_dict, optional_fill=['.*\.num_batches_tracked'], total_ignore=['.*pred\.']):
+
+        # Make a regex that matches if any of our regexes match.
+        opt_fill = "(" + ")|(".join(optional_fill) + ")"
+        tot_ignore = "(" + ")|(".join(total_ignore) + ")"
+
+        curr_dict = self.net.state_dict()
+        filtered_dict = {}
+
+        for k, v in loaded_dict.items():
+            if not re.match(tot_ignore, k):  # If in ignore list, ignore
+                if k in curr_dict:
+                    filtered_dict[k] = v
+                else:  # Check if it is possible to ignore it being gone
+                    if not re.match(opt_fill, k):
+                        assert False, f'Fatal: found unknown entry {k} in loaded checkpoint'
+
+        assert filtered_dict, 'State dictionary is empty'
+        # Also check for missing entries in loaded checkpoint
+        for k, v in curr_dict.items():
+            if k not in loaded_dict and not (re.match(opt_fill, k) or re.match(tot_ignore, k)):
+                assert False, f'Fatal: missing entry {k} from checkpoint'
+
+        # Overwrite entries in the existing state dict
+        curr_dict.update(filtered_dict)
+        self.net.load_state_dict(curr_dict)
 
     @staticmethod
     def _find_top_val_acc_checkpoint():

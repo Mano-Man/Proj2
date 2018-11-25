@@ -212,6 +212,13 @@ def format_seconds(seconds):
     return f
 
 
+def dict_sym_diff(a, b):
+    # Calculates the symetric difference between the keys of two dictionaries a and b
+    c = a.copy()
+    c.update(b)
+    for k in (a.keys() & b.keys()):
+        del c[k]
+    return c
 
 
 # ----------------------------------------------------------------------------------------------------------------------

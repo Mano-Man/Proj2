@@ -96,8 +96,8 @@ def one_patch_diff2d(N, M, patch_size, patterns):
                 yield ii*patch_n+jj, p_idx, change_one_patch2d(mask, ii, jj, patch_size, patterns[:,:,p_idx])
                 
     
-def one_patch_diff3d(C, N, M, patch_size, patterns, max_gra):
-    new_patch_size = rc.actual_patch_size(N, M, patch_size, max_gra)
+def one_patch_diff3d(C, N, M, patch_size, patterns, gran_thresh):
+    new_patch_size = rc.actual_patch_size(N, M, patch_size, gran_thresh)
     patch_n = math.ceil(N/new_patch_size)
     patch_m = math.ceil(M/new_patch_size)
     for p_idx, p in uniform_mask2d(new_patch_size, new_patch_size, patch_size, patterns): 
@@ -121,7 +121,7 @@ def one_patch_diff3d_uniform_patch(C, N, M, patch_size, patterns):
             yield cc, p_idx, mask
             
             
-def gen_masks(patch_size,patterns, mode, max_gra, layer_layout):
+def gen_masks(patch_size,patterns, mode, gran_thresh, layer_layout):
     layer = -1;   
     for C, N, M in  layer_layout:
         layer += 1
@@ -132,10 +132,10 @@ def gen_masks(patch_size,patterns, mode, max_gra, layer_layout):
             for channel, p_idx, mask in one_patch_diff3d_uniform_patch(C, N, M, patch_size, patterns):
                 yield layer, channel, 0, p_idx, mask
         else: #mode=='max_granularity'
-            for channel, patch, p_idx, mask in one_patch_diff3d(C, N, M, patch_size, patterns, max_gra):
+            for channel, patch, p_idx, mask in one_patch_diff3d(C, N, M, patch_size, patterns, gran_thresh):
                 yield layer, channel, patch, p_idx, mask
                 
-def gen_masks_with_resume(patch_size,patterns, mode, max_gra, layer_layout, resume_params=[0,0,0,0], mask_type=np.float32):
+def gen_masks_with_resume(patch_size,patterns, mode, gran_thresh, layer_layout, resume_params=[0,0,0,0], mask_type=np.float32):
     for layer in  range(resume_params[0], len(layer_layout)):
         C, N, M = layer_layout[layer]
         patch_n = math.ceil(N/patch_size)
@@ -165,7 +165,7 @@ def gen_masks_with_resume(patch_size,patterns, mode, max_gra, layer_layout, resu
                 resume_params[3] = 0
                 yield layer, 0, 0, p_idx, mask
         else: #mode=='max_granularity'
-            new_patch_size = rc.actual_patch_size(N, M, patch_size, max_gra)
+            new_patch_size = rc.actual_patch_size(N, M, patch_size, gran_thresh)
             patch_n = math.ceil(N/new_patch_size)
             patch_m = math.ceil(M/new_patch_size)
             ii_start = int(resume_params[2]/patch_n)
@@ -194,5 +194,5 @@ def gen_masks_with_resume(patch_size,patterns, mode, max_gra, layer_layout, resu
 #    sp_list.append((patch_size, torch.ones([C,N,M],device=device0)))
 #records = rc.Record(layer_layout,32*32,True, rc.uniform_layer,93.44,2,2,3)
 #gen = gen_masks_with_resume(patch_size, records.all_patterns, records.mode, \
-#                    records.max_gra,layer_layout)
+#                    records.gran_thresh,layer_layout)
 #layer, channel, patch, pattern_idx, mask = next(gen)
