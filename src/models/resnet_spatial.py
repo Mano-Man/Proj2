@@ -25,8 +25,8 @@ class Spatial(nn.Module):
 
         self.enable, self.filt_size, self.mask = spatial_params  # Presuming square filter
 
-        self.conv_filt = nn.Conv2d(channels, channels, kernel_size=self.filt_size, stride=self.filt_size,
-                                   bias=False)
+        self.conv_filt = nn.Conv2d(channels,channels, kernel_size=self.filt_size, stride=self.filt_size,
+                                   bias=False,groups=channels)
         self.conv_filt.weight.data.fill_(1)
         self.ops_saved = 0
         self.total_ops = 0
@@ -42,25 +42,26 @@ class Spatial(nn.Module):
 
         if self.enable:
             # Handle input padding: (Not needed for patch_size = 2x2 on CIFAR 10)
-            pad_s = x.size(2) % self.filt_size
+            pad_s = x.size(2) % self.filt_size # Using pad_s as res to save complexity
+            if pad_s != 0:
+                pad_s = self.filt_size - pad_s
+
             x_padded = torch.nn.functional.pad(x, (0, pad_s, 0, pad_s), value=0)  # Pad with ZEROS
 
             # Destroy anything on mask 0:
-            # x.size(0) is batch size I think - This can be taken off the calculation if we truncate to BATCH_SIZE data length
             batch_mask = self.mask.unsqueeze(0).repeat(x.size(0), 1, 1, 1)
             x_padded = torch.mul(x_padded, batch_mask)
 
             # The convolution basically sums over all non-zero cells. We get a block predicator for each patch
             b = (self.conv_filt(x_padded) > 0).float()
 
-            # TODO - Check if this could be shortened
+            # Check if this could be shortened
             pred_mask_ex = b.repeat(1, 1, self.filt_size, self.filt_size). \
                 reshape(b.size(0), b.size(1), self.filt_size, -1).permute(0, 1, 3, 2). \
                 reshape(b.size(0), b.size(1), b.size(2) * self.filt_size, -1)
 
-            # TODO: Might be problematic saving this on all runs.
-            self.ops_saved += torch.sum(torch.mul(1 - pred_mask_ex, 1 - batch_mask))  # TODO - The -1 might suffer from numeric error
-            self.total_ops += x.size(0) * x.size(1) * x.size(2) * x.size(3)  # Probably the fastest way to do this
+            self.ops_saved += torch.sum(torch.mul(1 - pred_mask_ex, 1 - batch_mask))
+            self.total_ops += x.size(0) * x.size(1) * x.size(2) * x.size(3)
             # Out predicator (after padding removal):
             return torch.mul(x, pred_mask_ex[:, :, 0:x.size(2), 0:x.size(3)])
 

@@ -40,17 +40,17 @@ DO_DOWNLOAD = True
 # Train Adjustments
 N_EPOCHS = 30
 LEARN_RATE = 0.1
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 # TODO - Write a learning step decrease functionality
 TRAIN_SET_SIZE = 50000  # Max 50000
 
 # Checkpoint Adjustments
-RESUME_CHECKPOINT = True
+RESUME_CHECKPOINT = False
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
-CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
-RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
-#CHECKPOINT_DIR = './data/checkpoint/'
-#RESULTS_DIR = './data/results/'
+# CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
+# RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
+CHECKPOINT_DIR = './data/checkpoint/'
+RESULTS_DIR = './data/results/'
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
 
 
@@ -65,7 +65,7 @@ DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than
 PATCH_SIZE = 2
 MAX_GRA = 32*32
 GENERATE_PATTERNS = True
-MIN_ONES = 1
+MIN_ONES = 4
 MAX_ONES = MIN_ONES + 1
 LAYER_LAYOUT = rc.Resnet18_layers_layout
 MODE = rc.uniform_layer
@@ -86,9 +86,10 @@ def training_main():
 
 def main():
     test_gen = CIFAR10_Test(batch_size=BATCH_SIZE, download=DO_DOWNLOAD)
-    nn = NeuralNet(SP_LIST_DISABLE)
-    test_loss, initial_acc, count = nn.test(test_gen)
-    print(f'=====>  loaded model results: initial acc {initial_acc:.3f} with {count}, initial loss: {test_loss:.3f}')
+    #nn = NeuralNet(SP_LIST_DISABLE)
+    #test_loss, initial_acc, count = nn.test(test_gen)
+    #print(f'=====>  loaded model results: initial acc {initial_acc:.3f} with {count}, initial loss: {test_loss:.3f}')
+    initial_acc = 93.83
     if RESUME_MASK_GEN:
         records = rc.load_from_file(RECORDS_FILENAME, path=RESULTS_DIR)
         st_point = records.find_resume_point()
