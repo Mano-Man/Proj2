@@ -11,9 +11,11 @@ import math
 import time
 import os
 import csv
-from util.gen import format_seconds
+
+#Todo : add to saved files self.no_of_patterns
 
 Resnet18_layers_layout = [(64, 32, 32), (64, 32, 32), (128, 16, 16), (256, 8, 8), (512, 4, 4)]
+gran_dict = {0:"max_granularity", 1:"uniform_filters", 2:"uniform_patch", 3:"uniform_layer"}
 max_granularity = 0
 uniform_filters = 1
 uniform_patch = 2
@@ -58,40 +60,40 @@ def actual_patch_size(N, M, patch_size, gran_thresh):
 
 class Record():
     '''
-    results[layer][channel][patch][pattern] = (op,acc)
+    results[layer][channel][patch][pattern] = (ops_saved, total_ops,acc)
     '''
 
     def __init__(self, layers_layout, gran_thresh, gen_patches, mode, initial_acc, *argv):
         self.mode = mode
         self.gran_thresh = gran_thresh
-        self.no_of_layers = len(layers_layout)
-        self.no_of_channels = [l[0] for l in layers_layout]
+        
         if gen_patches:
+            self.no_of_layers = len(layers_layout)
+            self.no_of_channels = [l[0] for l in layers_layout]
             self.all_patterns = all_patches_array(argv[0], argv[1])  # [patch_size, ones_range]
+            
+            patch_size = self.all_patterns.shape[0]
+            self.patch_sizes = [actual_patch_size(l[1], l[2], patch_size, gran_thresh) for l in layers_layout]
+            self.no_of_patches = [math.ceil(layers_layout[idx][1] / self.patch_sizes[idx]) * \
+                                  math.ceil(layers_layout[idx][2] / self.patch_sizes[idx]) for idx in
+                                  range(self.no_of_layers)]
+    
+            if mode == uniform_filters:
+                self.no_of_channels = [1] * self.no_of_layers
+            elif mode == uniform_patch:
+                self.no_of_patches = [1] * self.no_of_layers
+            elif mode == uniform_layer:
+                self.no_of_channels = [1] * self.no_of_layers
+                self.no_of_patches = [1] * self.no_of_layers
+            self.no_of_patterns = self.all_patterns.shape[2]
+            self._create_results()
         else:
             self.all_patterns = argv[0]
+            self.no_of_layers,self.no_of_channels, self.no_of_patches, self.no_of_patterns = argv[1]
 
-        patch_size = self.all_patterns.shape[0]
-        self.patch_sizes = [actual_patch_size(l[1], l[2], patch_size, gran_thresh) for l in layers_layout]
-        self.no_of_patches = [math.ceil(layers_layout[idx][1] / self.patch_sizes[idx]) * \
-                              math.ceil(layers_layout[idx][2] / self.patch_sizes[idx]) for idx in
-                              range(self.no_of_layers)]
-
-        if mode == uniform_filters:
-            self.no_of_channels = [1] * self.no_of_layers
-            self.filename = 'uniform_filters_'
-        elif mode == uniform_patch:
-            self.no_of_patches = [1] * self.no_of_layers
-            self.filename = 'uniform_patch_'
-        elif mode == uniform_layer:
-            self.no_of_channels = [1] * self.no_of_layers
-            self.no_of_patches = [1] * self.no_of_layers
-            self.filename = 'uniform_layer_'
-        else:
-            self.filename = 'max_granularity_'
-
-        self.filename += 'acc' + str(initial_acc) + '_mg' + str(self.gran_thresh) + '_' + format_seconds(time.time())
-
+        self.filename = gran_dict[self.mode]+ '_acc' + str(initial_acc) + '_mg' + str(gran_thresh) + '_' + str(int(time.time()))
+    
+    def _create_results(self):
         self.results = []
         for l in range(self.no_of_layers):
             layer = []
@@ -99,13 +101,13 @@ class Record():
                 channel = []
                 for j in range(self.no_of_patches[l]):
                     patch = []
-                    for i in range(self.all_patterns.shape[2]):
+                    for i in range(self.no_of_patterns):
                         patch.append(None)
                     channel.append(patch)
                 layer.append(channel)
             self.results.append(layer)
-
-    def addRecord(self, op, tot_op, acc, layer, channel=0, patch_idx=0, pattern_idx=0):
+            
+    def indexed_according_to_mode(self,layer, channel, patch_idx, pattern_idx):
         if self.mode == uniform_filters:
             channel = 0
         elif self.mode == uniform_patch:
@@ -113,14 +115,17 @@ class Record():
         elif self.mode == uniform_layer:
             channel = 0
             patch_idx = 0
+        return layer, channel, patch_idx, pattern_idx
 
+    def addRecord(self, op, tot_op, acc, layer, channel=0, patch_idx=0, pattern_idx=0):
+        layer, channel, patch_idx, pattern_idx = self.indexed_according_to_mode(layer, channel, patch_idx, pattern_idx)
         self.results[layer][channel][patch_idx][pattern_idx] = (op, tot_op, acc)
 
     def find_resume_point(self):
         for layer in range(self.no_of_layers):
             for channel in range(self.no_of_channels[layer]):
                 for patch_idx in range(self.no_of_patches[layer]):
-                    for pattern_idx in range(self.all_patterns.shape[2]):
+                    for pattern_idx in range(self.no_of_patterns):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return [layer, channel, patch_idx, pattern_idx]
 
@@ -133,14 +138,14 @@ class Record():
             for l in range(self.no_of_layers):
                 for k in range(self.no_of_channels[l]):
                     for j in range(self.no_of_patches[l]):
-                        for i in range(self.all_patterns.shape[2]):
+                        for i in range(self.no_of_patterns):
                             if self.results[l][k][j][i] is not None:
                                 csv.writer(f).writerow([l, k, j, i, self.results[l][k][j][i][0], \
                                                         self.results[l][k][j][i][1], \
                                                         self.results[l][k][j][i][2]])
             
     def gen_pattern_lists(self, min_acc):
-        self.slresults = []
+        slresults = []
         for l in range(self.no_of_layers):
             layer = []
             for k in range(self.no_of_channels[l]):
@@ -149,11 +154,12 @@ class Record():
                     patch = []
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
                         if res_tuple[2] > min_acc:
-                            patch.append(p_idx)
-                    patch.append(-1)
+                            patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                    patch.append((-1,-1,-1))
                     channel.append(patch)
                 layer.append(channel)
-            self.slresults.append(layer)
+            slresults.append(layer)
+        return slresults
 
 
 def save_to_file(record, use_default=True, path='./data/results', filename=''):

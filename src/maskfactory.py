@@ -10,8 +10,6 @@ N,M,C <- dim
 import numpy as np
 import math
 import Record as rc
-import torch
-
  
 
         
@@ -22,7 +20,12 @@ def int2base(x, base):
         x = int(x / base)
     return np.array(digits, dtype=np.intc)
  
-    
+def tile_opt(dims, pattern):
+    if len(pattern.shape) == 2:
+        pattern = pattern[np.newaxis, :, :]
+    rdims = (math.ceil(dims[i]/pattern.shape[i]) for i in range(len(dims)))
+    return np.tile(pattern, rdims)
+        
             
 def uniform_mask2d(N, M, patch_size, patterns, p_start=0):
     N = math.ceil(N/patch_size)
