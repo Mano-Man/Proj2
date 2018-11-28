@@ -167,7 +167,7 @@ def save_to_file(record, use_default=True, path='./data/results', filename=''):
         filename = record.filename
     if not os.path.isdir(path):
         os.mkdir(path)
-    outfile = open(os.path.join(path, filename), 'wb')
+    outfile = open(os.path.join(path, filename + '.pkl'), 'wb')
     pickle.dump(record, outfile)
     outfile.close()
 

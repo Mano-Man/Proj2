@@ -10,16 +10,23 @@ import NeuralNet as net
 import maskfactory as mf
 from util.data_import import CIFAR10_Test
 from tqdm import tqdm
+import numpy as np
+import torch
 from itertools import product, zip_longest
 
 class LayerQuantizier():
-    def __init__(self, rec, min_acc, patch_size):
+    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.input = rec.gen_pattern_lists(min_acc)
+        if default_in_pattern is None:
+            self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
+        else:
+            self.default_in_pattern = default_in_pattern     
         self._generate_patterns(rec.mode)
         self.output_rec.filename = 'LayerQuantizier_'+ rec.filename
         
+            
     def simulate(self):
         
         nn = net.NeuralNet(cfg.SP_MOCK)
@@ -31,7 +38,7 @@ class LayerQuantizier():
         for p_idx in tqdm(range(self.output_rec.find_resume_point()[3],self.output_rec.no_of_patterns)):
             sp_list = []
             for l in range(len(self.input)):
-                sp_list.append((1, self.patch_size, self.output_rec.all_patterns[p_idx][l]))
+                sp_list.append((1, self.patch_size, torch.from_numpy(self.output_rec.all_patterns[p_idx][l])))
             nn.update_spatial(sp_list)
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
@@ -57,11 +64,14 @@ class LayerQuantizier():
     
     def _gen_all_possible_patterns(self):
         all_patterns = []
-        d = [lQ.input[l][0][0] for l in range(len(lQ.input))]
+        d = [self.input[l][0][0] for l in range(len(self.input))]
         for net_opt in product(*d):
-            pattern = [None]*len(lQ.input)
+            pattern = [None]*len(self.input)
             for idx, opt in enumerate(net_opt):
-                pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.input_patterns[:,:,opt[0]])
+                if opt[0] >= 0:
+                    pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.input_patterns[:,:,opt[0]])
+                else: 
+                    pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.default_in_pattern)
             all_patterns.append(pattern)
         return all_patterns
             
@@ -71,9 +81,9 @@ class LayerQuantizier():
         
     
 # Test
-RESULTS_DIR = './data/results/'        
-uniform_layer_res = 'ps2_ones(1, 3)_uniform_layer_acc93.83_mg1024_17860D14h'
-rec_in = rc.load_from_file(uniform_layer_res,RESULTS_DIR)
-rec_in.no_of_patterns = rec_in.all_patterns.shape[2]        
-lQ = LayerQuantizier(rec_in,92,2) 
-       
+#RESULTS_DIR = './data/results/'        
+#uniform_layer_res = 'ps2_ones(1, 3)_uniform_layer_acc93.83_mg1024_17860D14h.pkl'
+#rec_in = rc.load_from_file(uniform_layer_res,RESULTS_DIR)
+#rec_in.no_of_patterns = rec_in.all_patterns.shape[2]        
+#lQ = LayerQuantizier(rec_in,92,2) 
+#       

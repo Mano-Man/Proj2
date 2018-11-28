@@ -11,11 +11,14 @@ import torch.nn
 import os
 from tqdm import tqdm
 from util.data_import import CIFAR10_Test
+import glob
+import re
 
 import Record as rc
 import maskfactory as mf
 import NeuralNet as net
 import Config as cfg
+from LayerQuantizier import LayerQuantizier
 
 
 
@@ -66,8 +69,29 @@ def training_main():
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
+def find_rec_file(mode): 
+    rec_filename = glob.glob(f'{cfg.RESULTS_DIR}ps*{rc.gran_dict[mode]}_*pkl')
+    if not rec_filename:
+        return None
+    else:
+        rec_filename.sort(key=os.path.getmtime)
+        # print(checkpoints)
+        return rec_filename[-1]
+
+def lQ_main():
+    in_rec_fn = find_rec_file(rc.uniform_layer) 
+    print('==> loading record file from ' + in_rec_fn)
+    in_rec = rc.load_from_file(in_rec_fn,path='')
+    init_acc = float(re.findall(r'\d+\.\d+', in_rec_fn)[0])
+    lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
+    print('==> starting simulation. file will be saved to ' + lQ.output_rec.filename)
+    lQ.simulate()
+    print('==> finised simulation. file saved to ' + lQ.output_rec.filename)
+    
+    
+
 
 
 
 if __name__ == '__main__':
-    main()
+    lQ_main()
