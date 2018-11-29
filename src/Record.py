@@ -128,6 +128,8 @@ class Record():
                     for pattern_idx in range(self.no_of_patterns[layer]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return [layer, channel, patch_idx, pattern_idx]
+    def is_full(self):
+        return None==self.find_resume_point()
 
     def save_to_csv(self, path='./data/results'):
         out_path = os.path.join(path, self.filename + ".csv")

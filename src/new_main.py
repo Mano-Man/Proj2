@@ -29,18 +29,24 @@ from ChannelQuantizier import ChannelQuantizier
 # ----------------------------------------------------------------------------------------------------------------------
 
 def gen_first_lvl_results_main(mode):
+    
+    rec_filename = find_rec_file(mode, prefix=f'ps{cfg.PS}_ones{cfg.ONES_RANGE}', suffix=f'mg{cfg.GRAN_THRESH}')
+    if rec_filename is not None:
+        rcs = rc.load_from_file(rec_filename, path='')
+        st_point = rcs.find_resume_point()
+        if None==st_point:
+            return rcs
+        
     nn = net.NeuralNet(cfg.SP_MOCK)
     test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
     _, test_acc, _ = nn.test(test_gen)
     print(f'==> Asserted test-acc of: {test_acc}\n')
-    rec_filename = find_rec_file(mode, prefix=f'ps{cfg.PS}_ones{cfg.ONES_RANGE}', suffix=f'acc{test_acc}_mg{cfg.GRAN_THRESH}')
-    if rec_filename is not None:
-        rcs = rc.load_from_file(rec_filename, path='')
-        st_point = rcs.find_resume_point()
-    else:
+    
+    if rec_filename is None:
         rcs = rc.Record(cfg.LAYER_LAYOUT, cfg.GRAN_THRESH, True, mode, test_acc, cfg.PS, cfg.ONES_RANGE)
         st_point = [0] * 4
         rcs.filename = 'ps' + str(cfg.PS) + '_ones' + str(cfg.ONES_RANGE) + '_' + rcs.filename
+        
     print('==> Result will be saved to ' + os.path.join(cfg.RESULTS_DIR, rcs.filename))
     save_counter = 0
     for layer, channel, patch, pattern_idx, mask in tqdm(mf.gen_masks_with_resume \
@@ -61,6 +67,7 @@ def gen_first_lvl_results_main(mode):
     rc.save_to_file(rcs, True, cfg.RESULTS_DIR)
     rcs.save_to_csv(cfg.RESULTS_DIR)
     print('==> Result saved to ' + os.path.join(cfg.RESULTS_DIR, rcs.filename))
+    return rcs
 
 
 def training_main():
@@ -94,31 +101,24 @@ def print_best_results(lQ_rec, min_acc, num=5):
                              cfg.ONES_RANGE, cfg.NET.__name__)
     rc.save_to_file(f_rec,True,cfg.RESULTS_DIR)
     print(f'Best Result saved to: ' + f_rec.filename)
+    
+def lQ_main(in_rec):
+    init_acc = float(re.findall(r'\d+\.\d+', in_rec.filename)[0])
+    lQ_rec_fn =  find_rec_file(rc.uniform_layer,prefix='LayerQ')
+    if lQ_rec_fn is None:
+        lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
+    else:
+        lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS,None, \
+                             rc.load_from_file(lQ_rec_fn, ''))
+    lQ.simulate()
+    return lQ.output_rec
 
 def by_uniform_layers():
-    in_rec_fn = find_rec_file(rc.uniform_layer,prefix='ps')
-    lQ_rec_fn =  find_rec_file(rc.uniform_layer,prefix='LayerQ')
-    
-    if in_rec_fn is None and lQ_rec_fn is None:
-        gen_first_lvl_results_main(rc.uniform_layer)
-        in_rec_fn = find_rec_file(rc.uniform_layer,prefix='ps')
-        
-    if lQ_rec_fn is None:
-        print('==> loading record file from ' + in_rec_fn)
-        in_rec = rc.load_from_file(in_rec_fn,path='')
-        init_acc = float(re.findall(r'\d+\.\d+', in_rec_fn)[0])
-        lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
-        print('==> starting simulation. file will be saved to ' + lQ.output_rec.filename)
-        lQ.simulate()
-        print('==> finised simulation. file saved to ' + lQ.output_rec.filename)
-        lQ_rec_fn =  find_rec_file(rc.uniform_layer,prefix='LayerQ')
-    
-    lQ_rec = rc.load_from_file(lQ_rec_fn, path='')
-    min_acc = float(re.findall(r'\d+\.\d+', lQ_rec_fn)[0])
+    in_rec = gen_first_lvl_results_main(rc.uniform_layer)
+    lQ_rec = lQ_main(in_rec)
+    min_acc = float(re.findall(r'\d+\.\d+', lQ_rec.filename)[0])
     print_best_results(lQ_rec, min_acc)
-    
-    
-    
+   
 def cQ_main():
     in_rec_fn = find_rec_file(rc.uniform_patch,prefix='ps') 
     print('==> loading record file from ' + in_rec_fn)

@@ -16,20 +16,30 @@ from functools import reduce
 from itertools import product
 
 class LayerQuantizier():
-    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None):
+    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None, out_rec=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.input = rec.gen_pattern_lists(min_acc)
         self.input = [self.input[l][0][0] for l in range(len(self.input))]
+        
         if default_in_pattern is None:
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
         else:
-            self.default_in_pattern = default_in_pattern     
-        self._generate_patterns(rec.mode)
-        self.output_rec.filename = 'LayerQ_mc'+ str(min_acc) + '_' + rec.filename
-        
+            self.default_in_pattern = default_in_pattern
             
+        if out_rec is None:
+            self._generate_patterns(rec.mode)
+            self.output_rec.filename = 'LayerQ_mc'+ str(min_acc) + '_' + rec.filename
+        else:
+            self.output_rec = out_rec
+        
     def simulate(self):
+        
+        st_point = self.output_rec.find_resume_point()
+        if None==st_point:
+           return
+       
+        print('==> starting simulation. file will be saved to ' + self.output_rec.filename)
         
         nn = net.NeuralNet(cfg.SP_MOCK)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
@@ -37,7 +47,7 @@ class LayerQuantizier():
         print(f'==> Asserted test-acc of: {test_acc}\n')
         
         save_counter = 0
-        for p_idx in tqdm(range(self.output_rec.find_resume_point()[3],self.output_rec.no_of_patterns[0])):
+        for p_idx in tqdm(range(st_point[3],self.output_rec.no_of_patterns[0])):
             sp_list = []
             for l in range(len(self.input)):
                 sp_list.append((1, self.patch_size, torch.from_numpy(self.output_rec.all_patterns[p_idx][l])))
@@ -52,6 +62,7 @@ class LayerQuantizier():
                 save_counter = 0
         self.save_state()
         self.output_rec.save_to_csv(cfg.RESULTS_DIR)
+        print('==> finised LayerQuantizier simulation.')
             
         
     def save_state(self):
@@ -87,7 +98,7 @@ class LayerQuantizier():
         
     
 # Test
-RESULTS_DIR = './data/results/'        
+#RESULTS_DIR = './data/results/'        
 #uniform_layer_res = 'ps2_ones(1, 3)_uniform_layer_acc93.83_mg1024_17860D14h.pkl'
 #rec_in = rc.load_from_file(uniform_layer_res,RESULTS_DIR)
 #rec_in.no_of_patterns = rec_in.all_patterns.shape[2]        

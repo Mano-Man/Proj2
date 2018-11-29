@@ -16,26 +16,35 @@ import torch
 from itertools import zip_longest
 
 class ChannelQuantizier():
-    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None):
+    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None, out_rec=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.input = rec.gen_pattern_lists(min_acc)
+        
         if default_in_pattern is None:
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
         else:
-            self.default_in_pattern = default_in_pattern     
-        self._generate_patterns(rec.mode)
-        self.output_rec.filename = 'ChannelQ_mc'+ str(min_acc) + '_' + rec.filename
+            self.default_in_pattern = default_in_pattern  
+            
+        if out_rec is None:
+            self._generate_patterns(rec.mode)
+            self.output_rec.filename = 'ChannelQ_mc'+ str(min_acc) + '_' + rec.filename
+        else:
+            self.output_rec = out_rec
+        
             
     def simulate(self):
         
+        st_point = self.output_rec.find_resume_point()
+        if None==st_point:
+           return
+       
         nn = net.NeuralNet(cfg.SP_MOCK)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
         _, test_acc, _ = nn.test(test_gen)
         print(f'==> Asserted test-acc of: {test_acc}\n')
         
         save_counter = 0
-        st_point = self.output_rec.find_resume_point()
         for layer in tqdm(range(st_point[0],len(cfg.LAYER_LAYOUT))):
             for p_idx in tqdm(range(st_point[3], len(self.output_rec.all_patterns[layer]))):
                 st_point[3] = 0
