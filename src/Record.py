@@ -160,6 +160,24 @@ class Record():
                 layer.append(channel)
             slresults.append(layer)
         return slresults
+    
+class FinalResultRc():
+    '''
+    results[layer][channel][patch][pattern] = (ops_saved, total_ops,acc)
+    '''
+
+    def __init__(self, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name):
+        self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range}_{gran_dict[mode]}_ma{max_acc_loss}'
+        self.mask = pattern
+        self.final_acc = f_acc
+        self.ops_saved = ops_saved
+        self.total_ops = tot_ops
+        self.mode = mode
+        self.min_acc = max_acc_loss
+        self.patch_size = ps
+        self.ones_range = ones_range
+        self.network = net_name
+        
 
 
 def save_to_file(record, use_default=True, path='./data/results', filename=''):

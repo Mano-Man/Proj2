@@ -25,7 +25,7 @@ class ChannelQuantizier():
         else:
             self.default_in_pattern = default_in_pattern     
         self._generate_patterns(rec.mode)
-        self.output_rec.filename = 'ChannelQ_min_acc'+ str(min_acc) + '_' + rec.filename
+        self.output_rec.filename = 'ChannelQ_mc'+ str(min_acc) + '_' + rec.filename
             
     def simulate(self):
         

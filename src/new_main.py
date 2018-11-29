@@ -78,16 +78,44 @@ def find_rec_file(mode, prefix = f'ps{cfg.PS}_ones{cfg.ONES_RANGE}', suffix=f'mg
         rec_filename.sort(key=os.path.getmtime)
         # print(checkpoints)
         return rec_filename[-1]
+    
+def print_best_results(lQ_rec, min_acc, num=5):
+    print(f'==> Here are the best {num} results:')
+    res = lQ_rec.gen_pattern_lists(min_acc)[0][0][0]
+    if len(res) < num:
+        num = len(res)
+    for idx in range(num):
+        ops_saved, tot_ops, acc = lQ_rec.results[0][0][0][res[idx][0]]
+        print(f'{idx}. operations saved: {round((ops_saved/tot_ops)*100, 3)}% with accuracy of: {acc}%')
+    f_rec = rc.FinalResultRc(lQ_rec.results[0][0][0][res[idx][0]][2], \
+                             lQ_rec.results[0][0][0][res[idx][0]][0], \
+                             lQ_rec.results[0][0][0][res[idx][0]][1],lQ_rec.mode, \
+                             lQ_rec.all_patterns[res[0][0]], cfg.PS, cfg.MAX_ACC_LOSS,\
+                             cfg.ONES_RANGE, cfg.NET.__name__)
+    rc.save_to_file(f_rec,True,cfg.RESULTS_DIR)
 
-def lQ_main():
-    in_rec_fn = find_rec_file(rc.uniform_layer,prefix='ps') 
-    print('==> loading record file from ' + in_rec_fn)
-    in_rec = rc.load_from_file(in_rec_fn,path='')
-    init_acc = float(re.findall(r'\d+\.\d+', in_rec_fn)[0])
-    lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
-    print('==> starting simulation. file will be saved to ' + lQ.output_rec.filename)
-    lQ.simulate()
-    print('==> finised simulation. file saved to ' + lQ.output_rec.filename)
+def by_uniform_layers():
+    in_rec_fn = find_rec_file(rc.uniform_layer,prefix='ps')
+    lQ_rec_fn =  find_rec_file(rc.uniform_layer,prefix='LayerQ')
+    
+    if in_rec_fn is None and lQ_rec_fn is None:
+        gen_first_lvl_results_main(rc.uniform_layer)
+        in_rec_fn = find_rec_file(rc.uniform_layer,prefix='ps')
+        
+    if lQ_rec_fn is None:
+        print('==> loading record file from ' + in_rec_fn)
+        in_rec = rc.load_from_file(in_rec_fn,path='')
+        init_acc = float(re.findall(r'\d+\.\d+', in_rec_fn)[0])
+        lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
+        print('==> starting simulation. file will be saved to ' + lQ.output_rec.filename)
+        lQ.simulate()
+        print('==> finised simulation. file saved to ' + lQ.output_rec.filename)
+        lQ_rec_fn =  find_rec_file(rc.uniform_layer,prefix='LayerQ')
+    
+    lQ_rec = rc.load_from_file(lQ_rec_fn, path='')
+    min_acc = float(re.findall(r'\d+\.\d+', lQ_rec_fn)[0])
+    print_best_results(lQ_rec, min_acc)
+    
     
 def cQ_main():
     in_rec_fn = find_rec_file(rc.uniform_patch,prefix='ps') 
@@ -103,5 +131,5 @@ def cQ_main():
 
 
 if __name__ == '__main__':
-    cQ_main() 
+    by_uniform_layers() 
     

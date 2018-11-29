@@ -26,7 +26,7 @@ class LayerQuantizier():
         else:
             self.default_in_pattern = default_in_pattern     
         self._generate_patterns(rec.mode)
-        self.output_rec.filename = 'LayerQ_min_acc'+ str(min_acc) + '_' + rec.filename
+        self.output_rec.filename = 'LayerQ_mc'+ str(min_acc) + '_' + rec.filename
         
             
     def simulate(self):
@@ -81,13 +81,17 @@ class LayerQuantizier():
             
             
             
+
     
+        
         
     
 # Test
-#RESULTS_DIR = './data/results/'        
+RESULTS_DIR = './data/results/'        
 #uniform_layer_res = 'ps2_ones(1, 3)_uniform_layer_acc93.83_mg1024_17860D14h.pkl'
 #rec_in = rc.load_from_file(uniform_layer_res,RESULTS_DIR)
 #rec_in.no_of_patterns = rec_in.all_patterns.shape[2]        
 #lQ = LayerQuantizier(rec_in,92,2) 
-#       
+# 
+#lQ_rec =  rc.load_from_file('LayerQuantizier_ps2_ones(1, 3)_uniform_layer_acc93.83_mg1024_17860D14h.pkl', RESULTS_DIR)    
+#print_best_results(lQ_rec, 92)
