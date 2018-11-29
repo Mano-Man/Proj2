@@ -86,7 +86,7 @@ def print_best_results(lQ_rec, min_acc, num=5):
         num = len(res)
     for idx in range(num):
         ops_saved, tot_ops, acc = lQ_rec.results[0][0][0][res[idx][0]]
-        print(f'{idx}. operations saved: {round((ops_saved/tot_ops)*100, 3)}% with accuracy of: {acc}%')
+        print(f'{idx+1}. operations saved: {round((ops_saved/tot_ops)*100, 3)}% with accuracy of: {acc}%')
     f_rec = rc.FinalResultRc(lQ_rec.results[0][0][0][res[idx][0]][2], \
                              lQ_rec.results[0][0][0][res[idx][0]][0], \
                              lQ_rec.results[0][0][0][res[idx][0]][1],lQ_rec.mode, \
