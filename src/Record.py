@@ -128,6 +128,14 @@ class Record():
                     for pattern_idx in range(self.no_of_patterns[layer]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return [layer, channel, patch_idx, pattern_idx]
+    def fill_empty(self):
+        for layer in range(self.no_of_layers):
+            for channel in range(self.no_of_channels[layer]):
+                for patch_idx in range(self.no_of_patches[layer]):
+                    for pattern_idx in range(self.no_of_patterns[layer]):
+                        if self.results[layer][channel][patch_idx][pattern_idx] is None:
+                            self.results[layer][channel][patch_idx][pattern_idx] = (-1,-1,-1)
+                        
     def is_full(self):
         return None==self.find_resume_point()
 
@@ -164,12 +172,8 @@ class Record():
         return slresults
     
 class FinalResultRc():
-    '''
-    results[layer][channel][patch][pattern] = (ops_saved, total_ops,acc)
-    '''
-
     def __init__(self, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name):
-        self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range}_{gran_dict[mode]}_ma{max_acc_loss}'
+        self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
         self.ops_saved = ops_saved
@@ -179,7 +183,6 @@ class FinalResultRc():
         self.patch_size = ps
         self.ones_range = ones_range
         self.network = net_name
-        
 
 
 def save_to_file(record, use_default=True, path='./data/results', filename=''):

@@ -28,7 +28,7 @@ class ChannelQuantizier():
             
         if out_rec is None:
             self._generate_patterns(rec.mode)
-            self.output_rec.filename = 'ChannelQ_mc'+ str(min_acc) + '_' + rec.filename
+            self.output_rec.filename = 'ChannelQ_ma'+ str(min_acc) + '_' + rec.filename
         else:
             self.output_rec = out_rec
         
@@ -39,6 +39,7 @@ class ChannelQuantizier():
         if None==st_point:
            return
        
+        print('==> starting simulation. file will be saved to ' + self.output_rec.filename)
         nn = net.NeuralNet(cfg.SP_MOCK)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
         _, test_acc, _ = nn.test(test_gen)
@@ -61,7 +62,7 @@ class ChannelQuantizier():
                     save_counter = 0
         self.save_state()
         self.output_rec.save_to_csv(cfg.RESULTS_DIR)
-            
+        print('==> finised ChannelQuantizier simulation.')    
         
     def save_state(self):
         rc.save_to_file(self.output_rec, True, cfg.RESULTS_DIR)

@@ -11,13 +11,13 @@ import torch.nn
 import os
 from tqdm import tqdm
 from util.data_import import CIFAR10_Test
-import glob
 import re
 
 import Record as rc
 import maskfactory as mf
 import NeuralNet as net
 import Config as cfg
+import RecordFinder as rf
 from LayerQuantizier import LayerQuantizier
 from ChannelQuantizier import ChannelQuantizier
 
@@ -30,7 +30,7 @@ from ChannelQuantizier import ChannelQuantizier
 
 def gen_first_lvl_results_main(mode):
     
-    rec_filename = find_rec_file(mode, prefix=f'ps{cfg.PS}_ones{cfg.ONES_RANGE}', suffix=f'mg{cfg.GRAN_THRESH}')
+    rec_filename = rf.find_rec_filename(mode, rf.FIRST_LVL_REC)
     if rec_filename is not None:
         rcs = rc.load_from_file(rec_filename, path='')
         st_point = rcs.find_resume_point()
@@ -76,35 +76,10 @@ def training_main():
     test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
-
-def find_rec_file(mode, prefix = f'ps{cfg.PS}_ones{cfg.ONES_RANGE}', suffix=f'mg{cfg.GRAN_THRESH}'): 
-    rec_filename = glob.glob(f'{cfg.RESULTS_DIR}{prefix}*{rc.gran_dict[mode]}*{suffix}*pkl')
-    if not rec_filename:
-        return None
-    else:
-        rec_filename.sort(key=os.path.getmtime)
-        # print(checkpoints)
-        return rec_filename[-1]
-    
-def print_best_results(lQ_rec, min_acc, num=5):
-    print(f'==> Here are the best {num} results:')
-    res = lQ_rec.gen_pattern_lists(min_acc)[0][0][0]
-    if len(res) < num:
-        num = len(res)
-    for idx in range(num):
-        ops_saved, tot_ops, acc = lQ_rec.results[0][0][0][res[idx][0]]
-        print(f'{idx+1}. operations saved: {round((ops_saved/tot_ops)*100, 3)}% with accuracy of: {acc}%')
-    f_rec = rc.FinalResultRc(lQ_rec.results[0][0][0][res[idx][0]][2], \
-                             lQ_rec.results[0][0][0][res[idx][0]][0], \
-                             lQ_rec.results[0][0][0][res[idx][0]][1],lQ_rec.mode, \
-                             lQ_rec.all_patterns[res[0][0]], cfg.PS, cfg.MAX_ACC_LOSS,\
-                             cfg.ONES_RANGE, cfg.NET.__name__)
-    rc.save_to_file(f_rec,True,cfg.RESULTS_DIR)
-    print(f'Best Result saved to: ' + f_rec.filename)
     
 def lQ_main(in_rec):
-    init_acc = float(re.findall(r'\d+\.\d+', in_rec.filename)[0])
-    lQ_rec_fn =  find_rec_file(rc.uniform_layer,prefix='LayerQ')
+    init_acc = float(re.findall(r'\d+\.\d+', in_rec.filename)[-1])
+    lQ_rec_fn =  rf.find_rec_filename(in_rec.mode, rf.lQ_REC)
     if lQ_rec_fn is None:
         lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
     else:
@@ -117,21 +92,27 @@ def by_uniform_layers():
     in_rec = gen_first_lvl_results_main(rc.uniform_layer)
     lQ_rec = lQ_main(in_rec)
     min_acc = float(re.findall(r'\d+\.\d+', lQ_rec.filename)[0])
-    print_best_results(lQ_rec, min_acc)
+    rf.print_best_results(lQ_rec, min_acc)
    
-def cQ_main():
-    in_rec_fn = find_rec_file(rc.uniform_patch,prefix='ps') 
-    print('==> loading record file from ' + in_rec_fn)
-    in_rec = rc.load_from_file(in_rec_fn,path='')
-    init_acc = float(re.findall(r'\d+\.\d+', in_rec_fn)[0])
-    cQ = ChannelQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
-    print('==> starting simulation. file will be saved to ' + cQ.output_rec.filename)
+def cQ_main(in_rec):
+    init_acc = float(re.findall(r'\d+\.\d+', in_rec.filename)[-1])
+    cQ_rec_fn =  rf.find_rec_filename(in_rec.mode,rf.cQ_REC)
+    if cQ_rec_fn is None:
+        cQ = ChannelQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
+    else:
+        cQ = ChannelQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS,None, \
+                             rc.load_from_file(cQ_rec_fn, ''))
     cQ.simulate()
-    print('==> finised simulation. file saved to ' + cQ.output_rec.filename)    
+    return cQ.output_rec
 
-
+def by_uniform_patches():
+    in_rec = gen_first_lvl_results_main(rc.uniform_patch)
+    cQ_rec = cQ_main(in_rec)
+    lQ_rec = lQ_main(cQ_rec)
+    min_acc = float(re.findall(r'\d+\.\d+', lQ_rec.filename)[0])
+    rf.print_best_results(lQ_rec, min_acc)
 
 
 if __name__ == '__main__':
-    by_uniform_layers() 
-    
+    by_uniform_patches() 
+    by_uniform_layers()
