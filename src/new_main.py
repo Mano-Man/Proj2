@@ -93,6 +93,7 @@ def print_best_results(lQ_rec, min_acc, num=5):
                              lQ_rec.all_patterns[res[0][0]], cfg.PS, cfg.MAX_ACC_LOSS,\
                              cfg.ONES_RANGE, cfg.NET.__name__)
     rc.save_to_file(f_rec,True,cfg.RESULTS_DIR)
+    print(f'Best Result saved to: ' + f_rec.filename)
 
 def by_uniform_layers():
     in_rec_fn = find_rec_file(rc.uniform_layer,prefix='ps')
@@ -115,6 +116,7 @@ def by_uniform_layers():
     lQ_rec = rc.load_from_file(lQ_rec_fn, path='')
     min_acc = float(re.findall(r'\d+\.\d+', lQ_rec_fn)[0])
     print_best_results(lQ_rec, min_acc)
+    
     
     
 def cQ_main():
