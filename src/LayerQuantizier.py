@@ -12,19 +12,21 @@ from util.data_import import CIFAR10_Test
 from tqdm import tqdm
 import numpy as np
 import torch
-from itertools import product, zip_longest
+from functools import reduce
+from itertools import product
 
 class LayerQuantizier():
     def __init__(self, rec, min_acc, patch_size, default_in_pattern=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.input = rec.gen_pattern_lists(min_acc)
+        self.input = [self.input[l][0][0] for l in range(len(self.input))]
         if default_in_pattern is None:
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
         else:
             self.default_in_pattern = default_in_pattern     
         self._generate_patterns(rec.mode)
-        self.output_rec.filename = 'LayerQuantizier_'+ rec.filename
+        self.output_rec.filename = 'LayerQ_min_acc'+ str(min_acc) + '_' + rec.filename
         
             
     def simulate(self):
@@ -35,7 +37,7 @@ class LayerQuantizier():
         print(f'==> Asserted test-acc of: {test_acc}\n')
         
         save_counter = 0
-        for p_idx in tqdm(range(self.output_rec.find_resume_point()[3],self.output_rec.no_of_patterns)):
+        for p_idx in tqdm(range(self.output_rec.find_resume_point()[3],self.output_rec.no_of_patterns[0])):
             sp_list = []
             for l in range(len(self.input)):
                 sp_list.append((1, self.patch_size, torch.from_numpy(self.output_rec.all_patterns[p_idx][l])))
@@ -56,16 +58,18 @@ class LayerQuantizier():
         rc.save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
         
     def _generate_patterns(self, mode):
-        if mode == rc.uniform_layer:
+        all_possibilities = reduce(lambda x, y: x*y, [len(self.input[i]) for i in range(len(self.input))])
+        if all_possibilities < cfg.MAX_POSSIBILITIES:
             self.output_rec = rc.Record(0,0,False, mode, 0, self._gen_all_possible_patterns() , \
                                         (1,[1],[1],0))
-            self.output_rec.no_of_patterns = len(self.output_rec.all_patterns)
+            self.output_rec.no_of_patterns = [len(self.output_rec.all_patterns)]
             self.output_rec._create_results()
+        else:
+            assert False, f'Too much possibilities! {all_possibilities} is too much options'
     
     def _gen_all_possible_patterns(self):
         all_patterns = []
-        d = [self.input[l][0][0] for l in range(len(self.input))]
-        for net_opt in product(*d):
+        for net_opt in product(*self.input):
             pattern = [None]*len(self.input)
             for idx, opt in enumerate(net_opt):
                 if opt[0] >= 0:

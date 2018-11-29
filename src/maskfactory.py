@@ -20,8 +20,8 @@ def int2base(x, base):
         x = int(x / base)
     return np.array(digits, dtype=np.intc)
  
-def tile_opt(dims, pattern):
-    if len(pattern.shape) == 2:
+def tile_opt(dims, pattern, is3D=True):
+    if is3D and len(pattern.shape) == 2:
         pattern = pattern[np.newaxis, :, :]
     rdims = (math.ceil(dims[i]/pattern.shape[i]) for i in range(len(dims)))
     return np.tile(pattern, rdims)

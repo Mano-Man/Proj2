@@ -15,7 +15,7 @@
 def main():
 	o = Optimizer(NeuralNetworkLoad(),test_set_size)
 	best = o.by_max_granularity(worst_acc)
-	print(f'Assimilated mask model with {best['acc']} test accuracy and {best['ops']} operations saved')
+	print(f"Assimilated mask model with {best['acc']} test accuracy and {best['ops']} operations saved")
 
 # ----------------------------------------------------------------------------------------------------------------------
 #

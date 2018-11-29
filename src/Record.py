@@ -85,7 +85,7 @@ class Record():
             elif mode == uniform_layer:
                 self.no_of_channels = [1] * self.no_of_layers
                 self.no_of_patches = [1] * self.no_of_layers
-            self.no_of_patterns = self.all_patterns.shape[2]
+            self.no_of_patterns = [self.all_patterns.shape[2]]*self.no_of_layers
             self._create_results()
         else:
             self.all_patterns = argv[0]
@@ -101,7 +101,7 @@ class Record():
                 channel = []
                 for j in range(self.no_of_patches[l]):
                     patch = []
-                    for i in range(self.no_of_patterns):
+                    for i in range(self.no_of_patterns[l]):
                         patch.append(None)
                     channel.append(patch)
                 layer.append(channel)
@@ -125,7 +125,7 @@ class Record():
         for layer in range(self.no_of_layers):
             for channel in range(self.no_of_channels[layer]):
                 for patch_idx in range(self.no_of_patches[layer]):
-                    for pattern_idx in range(self.no_of_patterns):
+                    for pattern_idx in range(self.no_of_patterns[layer]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return [layer, channel, patch_idx, pattern_idx]
 
@@ -138,7 +138,7 @@ class Record():
             for l in range(self.no_of_layers):
                 for k in range(self.no_of_channels[l]):
                     for j in range(self.no_of_patches[l]):
-                        for i in range(self.no_of_patterns):
+                        for i in range(self.no_of_patterns[l]):
                             if self.results[l][k][j][i] is not None:
                                 csv.writer(f).writerow([l, k, j, i, self.results[l][k][j][i][0], \
                                                         self.results[l][k][j][i][1], \
