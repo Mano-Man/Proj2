@@ -6,6 +6,7 @@ Created on Thu Nov 29 22:21:34 2018
 """
 import glob
 import os
+import re
 import Record as rc
 import Config as cfg
 
@@ -38,17 +39,27 @@ def print_best_results(lQ_rec, min_acc, num=5):
     rc.save_to_file(f_rec,True,cfg.RESULTS_DIR)
     print(f'Best Result saved to: ' + f_rec.filename)
         
-def find_rec_file_by_time(regex): 
+def find_rec_file_by_time(regex, check_max_acc_loss=False): 
     rec_filename = glob.glob(f'{cfg.RESULTS_DIR}{regex}')
+    if check_max_acc_loss:
+        rec_filename[:] = [fn for fn in rec_filename if does_max_acc_loss_match(fn)]
     if not rec_filename:
         return None
     else:
         rec_filename.sort(key=os.path.getmtime)
-        # print(checkpoints)
         return rec_filename[-1]
 
 def first_lvl_regex(mode):
     return f'ps{cfg.PS}_ones{cfg.ONES_RANGE}_{rc.gran_dict[mode]}_acc*_mg{cfg.GRAN_THRESH}_*pkl'
+
+def get_min_acc(fn):
+    return float(re.findall(r'\d+\.\d+', fn)[0])
+
+def get_init_acc(fn):
+    return float(re.findall(r'\d+\.\d+', fn)[-1])
+
+def does_max_acc_loss_match(fn):
+    return (round(get_init_acc(fn)-get_min_acc(fn), len(str(cfg.MAX_ACC_LOSS).split('.')[-1]))==cfg.MAX_ACC_LOSS)
 
 def cQ_regex(mode):
     regex = f'ChannelQ_ma*_'
@@ -71,13 +82,11 @@ def find_rec_filename(mode, record_type):
     if record_type==FIRST_LVL_REC:
         return find_rec_file_by_time(first_lvl_regex(mode))  
     elif record_type==cQ_REC:
-        return find_rec_file_by_time(cQ_regex(mode))
+        return find_rec_file_by_time(cQ_regex(mode),True)
     elif record_type==lQ_REC:
-        return find_rec_file_by_time(lQ_regex(mode))
+        return find_rec_file_by_time(lQ_regex(mode),True)
     elif record_type==FINAL_RESULT_REC:
         return find_rec_file_by_time(final_rec_regex(mode))
     else:
         return None
-
-
-        
+      

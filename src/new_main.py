@@ -11,7 +11,6 @@ import torch.nn
 import os
 from tqdm import tqdm
 from util.data_import import CIFAR10_Test
-import re
 
 import Record as rc
 import maskfactory as mf
@@ -78,7 +77,7 @@ def training_main():
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
     
 def lQ_main(in_rec):
-    init_acc = float(re.findall(r'\d+\.\d+', in_rec.filename)[-1])
+    init_acc = rf.get_init_acc(in_rec.filename)
     lQ_rec_fn =  rf.find_rec_filename(in_rec.mode, rf.lQ_REC)
     if lQ_rec_fn is None:
         lQ = LayerQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
@@ -91,11 +90,11 @@ def lQ_main(in_rec):
 def by_uniform_layers():
     in_rec = gen_first_lvl_results_main(rc.uniform_layer)
     lQ_rec = lQ_main(in_rec)
-    min_acc = float(re.findall(r'\d+\.\d+', lQ_rec.filename)[0])
+    min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
    
 def cQ_main(in_rec):
-    init_acc = float(re.findall(r'\d+\.\d+', in_rec.filename)[-1])
+    init_acc = rf.get_init_acc(in_rec.filename)
     cQ_rec_fn =  rf.find_rec_filename(in_rec.mode,rf.cQ_REC)
     if cQ_rec_fn is None:
         cQ = ChannelQuantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
@@ -109,10 +108,9 @@ def by_uniform_patches():
     in_rec = gen_first_lvl_results_main(rc.uniform_patch)
     cQ_rec = cQ_main(in_rec)
     lQ_rec = lQ_main(cQ_rec)
-    min_acc = float(re.findall(r'\d+\.\d+', lQ_rec.filename)[0])
+    min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
 
 
 if __name__ == '__main__':
     by_uniform_patches() 
-    by_uniform_layers()
