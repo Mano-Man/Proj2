@@ -4,18 +4,13 @@ from models.resnet import ResNet18
 from models.resnet_spatial import ResNet18Spatial, ResNet34Spatial
 import Record as rc
 import sys
-
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                 Global Config
 # ----------------------------------------------------------------------------------------------------------------------
 # Global Adjustments:
 NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial]
-NET = NETS[1]  # The c
+NET = NETS[1]  # The chosen network
 BATCH_SIZE = 128
-
-# Verbosity Adjustments:
-VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
-
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                Optimization Functionality
 # ----------------------------------------------------------------------------------------------------------------------
@@ -44,6 +39,9 @@ else:
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                Train Specific Functionality
 # ----------------------------------------------------------------------------------------------------------------------
+# Verbosity Adjustments:
+VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
+
 # Checkpoint Adjustments
 RESUME_CHECKPOINT = True
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'

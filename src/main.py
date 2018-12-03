@@ -73,6 +73,9 @@ def training_main():
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
+# ----------------------------------------------------------------------------------------------------------------------
+#                                         To be migrated to Optimizer
+# ----------------------------------------------------------------------------------------------------------------------
 
 def lQ_main(in_rec):
     init_acc = rf.get_init_acc(in_rec.filename)
