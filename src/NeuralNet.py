@@ -9,6 +9,8 @@ import re
 import os
 import glob
 import numpy as np
+import time
+import math
 from util.torch import net_summary
 from util.data_import import CIFAR10_Train
 from util.gen import Progbar, banner
@@ -78,13 +80,24 @@ class NeuralNet:
                                                                    dataset_size=cfg.TRAIN_SET_SIZE,
                                                                    download=cfg.DO_DOWNLOAD)
         p = Progbar(epochs)
+        t_start = time.time()
+        batches_per_step = math.ceil(cfg.TRAIN_SET_SIZE/cfg.BATCH_SIZE)
         for epoch in range(self.start_epoch, self.start_epoch + epochs):
+
             if cfg.VERBOSITY > 0:
                 banner(f'Epoch: {epoch}')
+                t_step_start = time.time()
             train_loss, train_acc, train_count = self._train_step()
             val_loss, val_acc, val_count = self.test(self.val_gen)
-            p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
+            if cfg.VERBOSITY > 0:
+                t_step_end = time.time()
+                batch_time = round((t_step_end-t_step_start)/batches_per_step, 3)
+                p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),("batch_time", batch_time)])
+            else:
+                p.add(1,values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
             self._checkpoint(val_acc, epoch + 1)
+        t_end = time.time()
+        print(f'==> Total train time: {t_end-t_start:.3f} secs :: per epoch: {(t_end-t_start)/epochs:.3f} secs')
         banner('Training Phase - End')
 
     def test(self, data_gen):

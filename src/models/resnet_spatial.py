@@ -48,6 +48,9 @@ class Spatial(nn.Module):
         for p in self.conv_filt.parameters():
             p.requires_grad = False
 
+        if use_cuda:
+            self.conv_filt = self.conv_filt.cuda()
+
         self.pad_s = in_shape[1] % self.p_size  # Using pad_s as res to save complexity
         if self.pad_s != 0:
             self.pad_s = self.p_size - self.pad_s
@@ -79,8 +82,9 @@ class Spatial(nn.Module):
         if not self.enable:
             return x
 
-        if self.pad_s != 0:  # TODO - Check this works
+        if self.pad_s != 0:  # TODO - Check this works - Is this a CUDA vector?
             x = torch.nn.functional.pad(x, (0, self.pad_s, 0, self.pad_s), value=0)  # Pad with ZEROS
+            assert False
 
         if x.size(0) != self.batch_size:
             # print('Batch size event') - Will happen once every test forward
@@ -153,7 +157,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
         ops_saved = 0
         total_ops = 0
         for sp in self.spatial_layers:
-            ops_saved += sp.ops_saved
+            ops_saved += int(sp.ops_saved)
             total_ops += sp.total_ops
         return ops_saved, total_ops
 
@@ -162,7 +166,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
             if sp.total_ops == 0:
                 print(f'Spatial Layer {i}: Ops saved: {sp.ops_saved}/{sp.total_ops}')
             else:
-                print(f'Spatial Layer {i}: Ops saved: {sp.ops_saved/sp.total_ops:.3f} [{sp.ops_saved}/{sp.total_ops}]')
+                print(f'Spatial Layer {i}: Ops saved: {sp.ops_saved/sp.total_ops:.3f} [{int(sp.ops_saved)}/{sp.total_ops}]')
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size):
 

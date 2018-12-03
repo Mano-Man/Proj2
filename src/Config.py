@@ -50,6 +50,6 @@ RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
 
 # Train Adjustments - Notice that there is currently no learning step decrease functionality
 N_EPOCHS = 30
-TRAIN_SET_SIZE = 50000  # Max 50000 for CIFAR10
+TRAIN_SET_SIZE = 5000  # Max 50000 for CIFAR10
 LEARN_RATE = 0.1
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory

@@ -29,6 +29,7 @@ def info_main():
     x_shape = (3, 32, 32)  # CIFAR10
 
     # Global info, extractable from net wrapper
+    nn.net.print_spatial_status()
     nn.summary(x_shape, print_it=True)
     print(f'The final output size of the net is: {nn.output_size(x_shape)}')
     nn.print_weights()
@@ -36,6 +37,7 @@ def info_main():
     # Spatial Operations, defined one the net itself
     nn.net.initialize_spatial_layers(x_shape, cfg.BATCH_SIZE, cfg.PS)  # Must be done if we want to use the spat layers
 
+    nn.train(epochs=1)  # Train to see disabled performance
     # Info:
     nn.net.print_ops_summary()
     print(nn.net.num_ops())  # (ops_saved, total_ops)
@@ -46,19 +48,22 @@ def info_main():
     spat_sizes = nn.net.generate_spatial_sizes(x_shape)
     print(spat_sizes)
 
-    # Generate a constant 0 value mask over all spatial nets - equivalent to SP_ZERO
-    # This was implemented for any val
-    nn.net.fill_masks_to_val(0)
+    # Generate a constant 1 value mask over all spatial nets - equivalent to SP_ZERO with 0 and SP_ONES with 1
+    # This was implemented for any constant value
+    nn.net.fill_masks_to_val(1)
     nn.net.print_spatial_status()  # Now all are enabled, seeing their mask was set
-
+    nn.train(epochs=1)  # Train to see all layers enabled performance
+    nn.net.print_ops_summary()
     # Turns on ids [0,3,16] and turns off all others
     nn.net.strict_mask_update(update_ids=[0, 3, 16],
-                              masks=[torch.ones(spat_sizes[0]), torch.ones(spat_sizes[3]), torch.ones(spat_sizes[16])])
+                              masks=[torch.zeros(spat_sizes[0]), torch.zeros(spat_sizes[3]),
+                                     torch.zeros(spat_sizes[16])])
 
     # Turns on ids [2] and *does not* turn off all others
-    nn.net.lazy_mask_update(update_ids=[2], masks=[torch.ones(spat_sizes[2])])
+    nn.net.lazy_mask_update(update_ids=[2], masks=[torch.zeros(spat_sizes[2])])
     nn.net.print_spatial_status()  # Now only 0,2,3,16 are enabled.
-    # nn.train(epochs=cfg.N_EPOCHS)
+    nn.train(epochs=1)  # Run with 4 layers on
+    nn.net.print_ops_summary()
 
 
 def training_main():
@@ -120,7 +125,7 @@ def gen_first_lvl_results_main(mode):
     test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD, max_dataset_size=cfg.TEST_SET_SIZE)
     _, test_acc, correct = nn.test(test_gen)
     print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
-
+    # TODO ~!~!~!~! INNA READ ME ~!~!~!~! TODO
     if rec_filename is None:  # TODO - LAYER_LAYOUT was destroyed - Need to use nn.net.generate_spatial_sizes(x_shape)
         rcs = rc.Record(cfg.LAYER_LAYOUT, cfg.GRAN_THRESH, True, mode, test_acc, cfg.PS, cfg.ONES_RANGE)
         st_point = [0] * 4
