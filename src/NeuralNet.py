@@ -8,15 +8,19 @@ import torch.backends.cudnn as cudnn
 import re
 import os
 import glob
+import numpy as np
+from util.torch import net_summary
 from util.data_import import CIFAR10_Train
 from util.gen import Progbar, banner
 
 import Config as cfg
 
 
-
+# ----------------------------------------------------------------------------------------------------------------------
+#
+# ----------------------------------------------------------------------------------------------------------------------
 class NeuralNet:
-    def __init__(self, sp_list):
+    def __init__(self):
 
         # Decide on device:
         if torch.cuda.is_available():
@@ -33,7 +37,7 @@ class NeuralNet:
 
         # Build Model:
         print(f'==> Building model {cfg.NET.__name__}')
-        self.net = cfg.NET(sp_list)
+        self.net = cfg.NET(self.device)
 
         if cfg.RESUME_CHECKPOINT:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
@@ -67,22 +71,14 @@ class NeuralNet:
         self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=cfg.LEARN_RATE,
                                    momentum=0.9, weight_decay=5e-4)
 
-    def update_spatial(self, sp_list):
-        old_state = self.net.state_dict()
-        self.net = cfg.NET(sp_list)  # TODO: This update can be done without a full reconstruction
-        self.net.load_state_dict(old_state,strict=False)
-        self.net = self.net.to(self.device)
-        self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=cfg.LEARN_RATE,
-                                   momentum=0.9, weight_decay=5e-4)
-        return self
-
-    def train(self, n_epochs):
+    def train(self, epochs):
 
         # Bring in Data
-        self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=cfg.BATCH_SIZE, dataset_size=cfg.TRAIN_SET_SIZE,
+        self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=cfg.BATCH_SIZE,
+                                                                   dataset_size=cfg.TRAIN_SET_SIZE,
                                                                    download=cfg.DO_DOWNLOAD)
-        p = Progbar(n_epochs)
-        for epoch in range(self.start_epoch, self.start_epoch + n_epochs):
+        p = Progbar(epochs)
+        for epoch in range(self.start_epoch, self.start_epoch + epochs):
             if cfg.VERBOSITY > 0:
                 banner(f'Epoch: {epoch}')
             train_loss, train_acc, train_count = self._train_step()
@@ -116,6 +112,24 @@ class NeuralNet:
         count = f'{correct}/{total}'
 
         return test_loss, test_acc, count
+
+    def summary(self, x_size, print_it):
+        # test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
+        # x, _ = next(iter(test_gen))
+        # x_shape = x.shape[1:]
+        return net_summary(self.net, x_size, device=str(self.device), print_it=print_it)
+
+    def output_size(self, x_size):
+        t = torch.Tensor(1, *x_size)
+        if str(self.device) == 'cuda':
+            t = t.cuda()
+        f = self.net.forward(torch.autograd.Variable(t))
+        return int(np.prod(f.size()[1:]))
+
+    def print_weights(self):
+        banner('Weights')
+        for i, weights in enumerate(list(self.net.parameters())):
+            print(f'Layer {i} :: weight shape: {list(weights.size())}')
 
     def _checkpoint(self, val_acc, epoch):
 

@@ -180,3 +180,69 @@ def ResNet18SpatialGil(pretrained=False, **kwargs):
 
 
 # test()
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                    NN Base
+# ----------------------------------------------------------------------------------------------------------------------
+# def expand_mat(x, patch_size, final_size):
+#     x_cpu = x.cpu()
+#     x_numpy = x_cpu.data.numpy()
+#     x_numpy = x_numpy.repeat(patch_size, 2).repeat(patch_size, 3)  # faster than kron
+#     x_mask = torch.FloatTensor(x_numpy)
+#
+#     pad_s = final_size - x_mask.size(3)
+#     if pad_s > 0:
+#         x_mask = torch.nn.functional.pad(x_mask, (0, pad_s, 0, pad_s), value=1)
+#         assert (1 == 0)  # in this implementation I should be here
+#
+#     if torch.cuda.is_available():
+#         x_mask = x_mask.cuda()
+#
+#     return x_mask
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                    Layer Configurations
+# ----------------------------------------------------------------------------------------------------------------------
+# def expand_mat_gpu(x, p_size):
+#     x_mask = x.repeat(1, 1, p_size, p_size).reshape(x.size(0), x.size(1), p_size, -1).permute(0, 1, 3, 2).reshape(
+#         x.size(0), x.size(1), x.size(2) * p_size, -1)
+#
+#     return x_mask
+# class Spatial(nn.Module):
+#     def __init__(self, channels, spatial_params):
+#         super(Spatial, self).__init__()
+#         self.channels = channels
+#         self.filt_size = spatial_params[0]
+#         self.mask = spatial_params[1]
+#         self.filt = torch.ones(self.filt_size, self.filt_size)
+#         self.conv_filt = nn.Conv2d(channels, channels, kernel_size=self.filt_size, stride=self.filt_size, bias=False)
+#         self.conv_filt.weight.data.fill_(1)
+#         if torch.cuda.is_available():
+#             self.conv_filt.cuda()
+#
+#     def forward(self, x):
+#         self.conv_filt.weight.data.fill_(1)
+#         if torch.cuda.is_available():
+#             self.conv_filt.cuda()
+#
+#         res = x.size(2) % self.filt_size
+#         if res != 0:
+#             pad_s = self.filt_size - res
+#         else:
+#             pad_s = 0
+#         x_padded = torch.nn.functional.pad(x, (0, pad_s, 0, pad_s), value=0)
+#         # new line
+#         x_padded = torch.mul(x_padded, self.mask.unsqueeze(0).repeat(x.size(0), 1, 1, 1))
+#         pred_mask_sq = self.conv_filt(x_padded)
+#
+#         # simulating a prediction by masking sub-matrices within the input
+#         pred_mask_sq = (pred_mask_sq > 0).to('cuda', dtype=torch.float32)
+#
+#         # expand
+#         pred_mask_ex = expand_mat_gpu(pred_mask_sq, self.filt_size)
+#         assert (pred_mask_ex.size(2) == (x.size(2) + pad_s))
+#         pred_mask_ex = pred_mask_ex[:, :, 0:x.size(2), 0:x.size(3)]
+#
+#         # element-wise mult
+#         x_pred = torch.mul(x, pred_mask_ex)
+#         return x_pred

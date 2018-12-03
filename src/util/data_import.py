@@ -5,7 +5,7 @@ import urllib
 import torch
 from torchvision import datasets
 from torchvision import transforms
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -15,16 +15,16 @@ import numpy as np
 # ----------------------------------------------------------------------------------------------------------------------
 
 def CIFAR10_Train(batch_size,
-                           dataset_size=50000,
-                           data_dir='./data',
-                           augment=True,
-                           random_seed=None,
-                           valid_size=0.1,
-                           shuffle=True,
-                           show_sample=False,
-                           num_workers=1,
-                           pin_memory=True,
-                           download=False):
+                  dataset_size=50000,
+                  data_dir='./data',
+                  augment=True,
+                  random_seed=None,
+                  valid_size=0.1,
+                  shuffle=True,
+                  show_sample=False,
+                  num_workers=1,
+                  pin_memory=True,
+                  download=False):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-10 dataset. A sample
@@ -52,7 +52,7 @@ def CIFAR10_Train(batch_size,
     - label_names: a list with all label names by order
     """
     assert ((valid_size >= 0) and (valid_size <= 1)), "[!] valid_size should be in the range [0, 1]."
-    label_names = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck']
+    label_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
     normalize = transforms.Normalize(
         mean=[0.4914, 0.4822, 0.4465],
@@ -88,14 +88,19 @@ def CIFAR10_Train(batch_size,
         download=download, transform=valid_transform,
     )
 
-    num_train = min(len(train_dataset),dataset_size)
-    indices = list(range(num_train))
-    split = int(np.floor(valid_size * num_train))
-
+    # Randomize all 50000 indices
+    indices = list(range(len(train_dataset)))
     if shuffle:
         if random_seed is not None:
             np.random.seed(random_seed)
         np.random.shuffle(indices)
+
+    # Now truncate to the required size
+    num_train = min(len(train_dataset), dataset_size)
+    indices = indices[:num_train]
+
+    # Split validation
+    split = int(np.floor(valid_size * num_train))
 
     train_idx, valid_idx = indices[split:], indices[:split]
     train_sampler = SubsetRandomSampler(train_idx)
@@ -119,17 +124,16 @@ def CIFAR10_Train(batch_size,
         data_iter = iter(sample_loader)
         images, labels = data_iter.next()
         X = images.numpy().transpose([0, 2, 3, 1])
-        plot_images(X, labels,label_names)
+        plot_images(X, labels, label_names)
 
-    return train_loader, valid_loader,label_names
+    return train_loader, valid_loader, label_names
 
 
-def CIFAR10_Test(batch_size,
-                    data_dir='./data',
-                    shuffle=True,
-                    num_workers=1,
-                    pin_memory=True,
-                    download=False):
+def CIFAR10_Test(batch_size, max_dataset_size=10000,
+                 data_dir='./data',
+                 num_workers=1,
+                 pin_memory=True,
+                 download=False):
     """
     Utility function for loading and returning a multi-process
     test iterator over the CIFAR-10 dataset.
@@ -157,17 +161,25 @@ def CIFAR10_Test(batch_size,
         normalize,
     ])
 
-    dataset = datasets.CIFAR10(
+    test_dataset = datasets.CIFAR10(
         root=data_dir, train=False,
         download=download, transform=transform,
     )
 
+    # Looking at test_dataset - it is already shuffled. We will only truncate it:
+    if max_dataset_size < len(test_dataset):
+        indices = list(range(max_dataset_size))
+        test_sampler = SequentialSampler(indices)
+    else:
+        test_sampler = None
+
     test_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle,
+        test_dataset, batch_size=batch_size, sampler=test_sampler,
         num_workers=num_workers, pin_memory=pin_memory,
     )
 
     return test_loader
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               	General
@@ -188,7 +200,8 @@ def maybe_download(filename, url, expected_bytes):
             'Failed to verify ' + filename + '. Can you get to it with a browser?')
     return filename
 
-def plot_images(images, cls_true,label_names, cls_pred=None):
+
+def plot_images(images, cls_true, label_names, cls_pred=None):
     """
     Adapted from https://github.com/Hvass-Labs/TensorFlow-Tutorials/
     """

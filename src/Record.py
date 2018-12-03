@@ -13,8 +13,6 @@ import os
 import csv
 
 #Todo : add to saved files self.no_of_patterns
-
-Resnet18_layers_layout = [(64, 32, 32), (64, 32, 32), (128, 16, 16), (256, 8, 8), (512, 4, 4)]
 gran_dict = {0:"max_granularity", 1:"uniform_filters", 2:"uniform_patch", 3:"uniform_layer"}
 max_granularity = 0
 uniform_filters = 1
