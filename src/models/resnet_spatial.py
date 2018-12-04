@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as tf
 from src.util.torch import net_summary
 from src.util.gen import banner
+import numpy as np
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -72,11 +73,13 @@ class Spatial(nn.Module):
             self.mask = self.mask.cuda()  # TODO - Check if we can already allocate on GPU, maybe with set_
             self.batch_mask = self.batch_mask.cuda()
 
-        self.enable = True
-
     def set_enable(self, enable):
         # To be used only after layer is initialized to input size
         self.enable = enable
+
+    def reset_ops(self):
+        self.total_ops = 0
+        self.ops_saved = 0
 
     def forward(self, x):
         if not self.enable:
@@ -137,6 +140,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
             for block in layer:
                 self.spatial_layers.append(block.pred1)
                 self.spatial_layers.append(block.pred2)
+        self.spatial_params = None  # Will be set on first init of spatial layers
 
     def forward(self, x):
         out = self.conv1(x)
@@ -152,6 +156,21 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
         out = self.linear(out)
         return out
 
+    def summary(self,x_shape,print_it=True):
+
+        if self.spatial_params is None: #Layers were never init
+            return net_summary(self, x_shape, device=str(self.device), print_it=print_it)
+        else:
+            enabled = self.enabled_layers()
+            self.disable_spatial_layers(range(self.num_spatial_layers()))
+            summary = net_summary(self, x_shape, device=str(self.device), print_it=print_it)
+            self.enable_spatial_layers(enabled)
+            return summary
+
+    def reset_ops(self):
+        for sp in self.spatial_layers:
+            sp.reset_ops()
+
     def num_ops(self):
 
         ops_saved = 0
@@ -166,18 +185,34 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
             if sp.total_ops == 0:
                 print(f'Spatial Layer {i}: Ops saved: {sp.ops_saved}/{sp.total_ops}')
             else:
-                print(f'Spatial Layer {i}: Ops saved: {sp.ops_saved/sp.total_ops:.3f} [{int(sp.ops_saved)}/{sp.total_ops}]')
+                print(
+                    f'Spatial Layer {i}: Ops saved: {sp.ops_saved/sp.total_ops:.3f} [{int(sp.ops_saved)}/{sp.total_ops}]')
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size):
 
-        spatial_params = self.generate_spatial_sizes(x_shape)
+        # From init phase and on, set the spatial sizes so it won't affect the total ops.
+        self.spatial_params = self.generate_spatial_sizes(x_shape)
 
         for i, layer in enumerate(self.spatial_layers):
-            layer.init_to_input(p_size=p_size, batch_size=batch_size, in_shape=spatial_params[i],
+            layer.init_to_input(p_size=p_size, batch_size=batch_size, in_shape=self.spatial_params[i],
                                 use_cuda=self.use_cuda)
 
     def num_spatial_layers(self):
-        return 2 * sum(self.blocks_per_layer) + 1
+        return len(self.spatial_layers)
+
+    def enabled_layers(self):
+        return [i for i in range(self.num_spatial_layers()) if self.spatial_layers[i].enable]
+
+    def disabled_layers(self):
+        return [i for i in range(self.num_spatial_layers()) if not self.spatial_layers[i].enable]
+
+    def enable_spatial_layers(self, idx_list):
+        for resurrected in idx_list:
+            self.spatial_layers[resurrected].set_enable(True)
+
+    def disable_spatial_layers(self,idx_list):
+        for goner_id in idx_list:
+            self.spatial_layers[goner_id].set_enable(False)
 
     def print_spatial_status(self):
 
@@ -193,23 +228,29 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
         self.lazy_mask_update(update_ids, masks)
 
         # Turn off all others
-        disabled = [i for i in list(range(self.num_spatial_layers())) if i not in update_ids]
-        for goner_id in disabled:
-            self.spatial_layers[goner_id].set_enable(False)
+        disabled = [i for i in range(len(self.spatial_layers)) if i not in update_ids]
+        self.disable_spatial_layers(disabled)
+
 
     def lazy_mask_update(self, update_ids, masks):
         for (i, mask) in zip(update_ids, masks):
             self.spatial_layers[i].set_mask(mask)
+            self.spatial_layers[i].set_enable(True)
 
     def fill_masks_to_val(self, val):
         for layer in self.spatial_layers:
             layer.set_constant_mask(val)
+            layer.set_enable(True)
 
     def generate_spatial_sizes(self, x_shape):
-        summary = net_summary(self, x_shape, device=str(self.device), print_it=False)
-        spatial_params = [value['input_shape'][1:] for key, value in summary.items() if key.startswith('Spatial')]
-        assert len(spatial_params) == self.num_spatial_layers()
-        return spatial_params
+
+        if self.spatial_params is None:  # Spatial layers were not init, so no problem with ops
+            summary = net_summary(self, x_shape, device=str(self.device), print_it=False)
+            spatial_params = [value['input_shape'][1:] for key, value in summary.items() if key.startswith('Spatial')]
+            assert len(spatial_params) == self.num_spatial_layers()
+            return spatial_params
+        else:
+            return self.spatial_params
 
     def _populate_block(self, block, planes, num_blocks, stride):
 

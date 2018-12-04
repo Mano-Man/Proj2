@@ -14,6 +14,9 @@ import numpy as np
 #                                               	 Torch
 # ----------------------------------------------------------------------------------------------------------------------
 
+def CIFAR10_shape():
+    return (3,32,32)
+
 def CIFAR10_Train(batch_size,
                   dataset_size=50000,
                   data_dir='./data',

@@ -8,6 +8,14 @@ import numpy as np
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               	Model Summary
 # ----------------------------------------------------------------------------------------------------------------------
+
+def output_size(model, device,x_size):
+    t = torch.Tensor(1, *x_size)
+    if str(device) == 'cuda':
+        t = t.cuda()
+    f = model.forward(torch.autograd.Variable(t))
+    return int(np.prod(f.size()[1:]))
+
 def net_summary(model, input_size, batch_size=-1, device="cuda",print_it=True):
 
     def register_hook(module):

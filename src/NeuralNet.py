@@ -126,18 +126,9 @@ class NeuralNet:
 
         return test_loss, test_acc, count
 
-    def summary(self, x_size, print_it):
-        # test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
-        # x, _ = next(iter(test_gen))
-        # x_shape = x.shape[1:]
-        return net_summary(self.net, x_size, device=str(self.device), print_it=print_it)
-
-    def output_size(self, x_size):
-        t = torch.Tensor(1, *x_size)
-        if str(self.device) == 'cuda':
-            t = t.cuda()
-        f = self.net.forward(torch.autograd.Variable(t))
-        return int(np.prod(f.size()[1:]))
+    def summary(self, x_size, print_it=True):
+        #TODO - Make summary part of an interface
+        return self.net.summary(x_size,print_it=print_it)
 
     def print_weights(self):
         banner('Weights')
