@@ -8,7 +8,7 @@ import Record as rc
 import Config as cfg
 import NeuralNet as net
 import maskfactory as mf
-from util.data_import import CIFAR10_Test
+from util.data_import import CIFAR10_Test,CIFAR10_shape
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -35,7 +35,7 @@ class LayerQuantizier():
             
             
         if out_rec is None:
-            self._generate_patterns(rec.mode)
+            self._generate_patterns(rec.mode, rec.layers_layout)
             self.output_rec.filename = 'LayerQ_ma'+ str(min_acc) + '_' + rec.filename
         else:
             self.output_rec = out_rec
@@ -48,7 +48,8 @@ class LayerQuantizier():
        
         print('==> starting simulation. file will be saved to ' + self.output_rec.filename)
         
-        nn = net.NeuralNet(cfg.SP_MOCK)
+        nn = net.NeuralNet()
+        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
         _, test_acc, _ = nn.test(test_gen)
         print(f'==> Asserted test-acc of: {test_acc}\n')
@@ -60,10 +61,10 @@ class LayerQuantizier():
             sp_list = []
             for l in range(len(self.input)):
                 sp_list.append((1, self.patch_size, torch.from_numpy(self.output_rec.all_patterns[p_idx][l])))
-            nn.update_spatial(sp_list)
+            nn.net.strict_mask_update(update_ids=list(range(len(self.output_rec.layers_layout))), masks=sp_list)
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
-            self.output_rec.addRecord(ops_saved.item(), ops_total, test_acc, 0, 0, 0, p_idx)
+            self.output_rec.addRecord(ops_saved, ops_total, test_acc, 0, 0, 0, p_idx)
             
             if len(self.output_rec.all_patterns) > cfg.MAX_POSSIBILITIES and test_acc >= self.min_acc:
                 break
@@ -96,28 +97,28 @@ class LayerQuantizier():
             self.curr_acc_th = acc
         return True 
         
-    def _generate_patterns(self, mode):
+    def _generate_patterns(self, mode, layers_layout):
         all_possibilities = reduce(lambda x, y: x*y, [len(self.input[i]) for i in range(len(self.input))])
         if all_possibilities > cfg.MAX_POSSIBILITIES:
             self._clean_input()
-        self.output_rec = rc.Record(0,0,False, mode, 0, self._gen_all_possible_patterns(mode) , \
+        self.output_rec = rc.Record(layers_layout,0,False, mode, 0, self._gen_all_possible_patterns(mode, layers_layout) , \
                                     (1,[1],[1],0))
         self.output_rec.no_of_patterns = [len(self.output_rec.all_patterns)]
         self.output_rec._create_results()
         #else:
             #assert False, f'Too much possibilities! {len(self.output_rec.all_patterns)} is too much options'
     
-    def _gen_all_possible_patterns(self, mode):
+    def _gen_all_possible_patterns(self, mode, layers_layout):
         all_patterns = []
         for net_opt in product(*self.input):
             pattern = [None]*len(self.input)
             for idx, opt in enumerate(net_opt):
                 if opt[0] == -1:
-                    pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.default_in_pattern)
+                    pattern[idx] = mf.tile_opt(layers_layout[idx], self.default_in_pattern)
                 elif mode == rc.uniform_layer:
-                    pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.input_patterns[:,:,opt[0]])
+                    pattern[idx] = mf.tile_opt(layers_layout[idx], self.input_patterns[:,:,opt[0]])
                 elif mode == rc.uniform_filters:
-                    pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx],self.input_patterns[idx][0][opt[0]])
+                    pattern[idx] = mf.tile_opt(layers_layout[idx],self.input_patterns[idx][0][opt[0]])
                 else: 
                     pattern[idx] = self.input_patterns[idx][opt[0]]
             all_patterns.append(pattern)

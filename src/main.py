@@ -17,6 +17,7 @@ import Config as cfg
 import RecordFinder as rf
 from LayerQuantizier import LayerQuantizier
 from ChannelQuantizier import ChannelQuantizier
+from PatchQuantizier import PatchQuantizier
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -41,7 +42,7 @@ def info_main():
     nn.net.print_spatial_status()
     nn.train(epochs=1)  # Train to see disabled performance
     nn.net.print_ops_summary()
-    print(nn.net.num_ops())  # (ops_saved, total_ops)
+    #print(nn.net.num_ops())  # (ops_saved, total_ops)
 
     # Given x, we generate all spatial layer requirement sizes:
     spat_sizes = nn.net.generate_spatial_sizes(x_shape)
@@ -54,8 +55,8 @@ def info_main():
     print(nn.net.enabled_layers())
     print(nn.net.disabled_layers())
     nn.net.print_spatial_status()  # Now all are enabled, seeing the mask was set
-    nn.train(epochs=1)  # Train to see all layers enabled performance
-    nn.net.print_ops_summary()
+    #nn.train(epochs=1)  # Train to see all layers enabled performance
+    #nn.net.print_ops_summary()
     # Turns on ids [0,3,16] and turns off all others
     nn.net.strict_mask_update(update_ids=[0, 3, 16],
                               masks=[torch.zeros(spat_sizes[0]), torch.zeros(spat_sizes[3]),
@@ -128,14 +129,15 @@ def gen_first_lvl_results_main(mode):
             return rcs
 
     nn = NeuralNet()
+    layers_layout = nn.net.generate_spatial_sizes(CIFAR10_shape())
+    nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
     test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD, max_dataset_size=cfg.TEST_SET_SIZE)
     _, test_acc, correct = nn.test(test_gen)
     print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
 
-    # TODO ~!~!~!~! INNA READ ME ~!~!~!~! TODO
-    # Remember to init spatial layers
-    if rec_filename is None:  # TODO - LAYER_LAYOUT was destroyed - Need to use nn.net.generate_spatial_sizes(x_shape)
-        rcs = rc.Record(cfg.LAYER_LAYOUT, cfg.GRAN_THRESH, True, mode, test_acc, cfg.PS, cfg.ONES_RANGE)
+
+    if rec_filename is None:  
+        rcs = rc.Record(layers_layout, cfg.GRAN_THRESH, True, mode, test_acc, cfg.PS, cfg.ONES_RANGE)
         st_point = [0] * 4
         rcs.filename = f'ps{cfg.PS}_ones{cfg.ONES_RANGE[0]}x{cfg.ONES_RANGE[1]}_{rcs.filename}'
 
@@ -144,19 +146,12 @@ def gen_first_lvl_results_main(mode):
     for layer, channel, patch, pattern_idx, mask in tqdm(mf.gen_masks_with_resume \
                                                                      (cfg.PS, rcs.all_patterns, rcs.mode,
                                                                       rcs.gran_thresh,
-                                                                      cfg.LAYER_LAYOUT, resume_params=st_point)):
-        # Todo - Invalid lines
-        # Mask needs to be created according to generate_spatial_sizes(x_shape)[layer] - This is O(1) operation
-        sp_list = cfg.SP_MOCK
-        sp_list[layer] = (1, cfg.PS, cfg.BATCH_SIZE, torch.from_numpy(mask))
-        nn.update_spatial(sp_list)
-        # Todo - Invalid lines
-        # Correct line:
+                                                                      layers_layout, resume_params=st_point)):
         nn.net.strict_mask_update(update_ids=[layer], masks=[torch.from_numpy(mask)])
 
         _, test_acc, _ = nn.test(test_gen)
         ops_saved, ops_total = nn.net.num_ops()
-        rcs.addRecord(ops_saved.item(), ops_total, test_acc, layer, channel, patch, pattern_idx)
+        rcs.addRecord(ops_saved, ops_total, test_acc, layer, channel, patch, pattern_idx)
 
         save_counter += 1
         if save_counter > cfg.SAVE_INTERVAL:
@@ -170,4 +165,4 @@ def gen_first_lvl_results_main(mode):
 
 
 if __name__ == '__main__':
-    info_main()
+    by_uniform_layers()

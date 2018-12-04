@@ -64,6 +64,7 @@ class Record():
     def __init__(self, layers_layout, gran_thresh, gen_patches, mode, initial_acc, *argv):
         self.mode = mode
         self.gran_thresh = gran_thresh
+        self.layers_layout = layers_layout
         
         if gen_patches:
             self.no_of_layers = len(layers_layout)
@@ -171,7 +172,7 @@ class Record():
     
 class FinalResultRc():
     def __init__(self, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name):
-        self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
+        self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
         self.ops_saved = ops_saved

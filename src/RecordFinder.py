@@ -17,7 +17,7 @@ cQ_REC = 2
 lQ_REC = 3
 FINAL_RESULT_REC = 4
 
-def print_best_results(lQ_rec, min_acc, num=5):
+def print_best_results(lQ_rec, min_acc, num=1):
     st_point = lQ_rec.find_resume_point
     if st_point is not None:
         lQ_rec.fill_empty()
@@ -50,7 +50,7 @@ def find_rec_file_by_time(regex, check_max_acc_loss=False):
         return rec_filename[-1]
 
 def first_lvl_regex(mode):
-    return f'ps{cfg.PS}_ones{cfg.ONES_RANGE}_{rc.gran_dict[mode]}_acc*_mg{cfg.GRAN_THRESH}_*pkl'
+    return f'ps{cfg.PS}_ones{cfg.ONES_RANGE[0]}x{cfg.ONES_RANGE[1]}_{rc.gran_dict[mode]}_acc*_mg{cfg.GRAN_THRESH}_*pkl'
 
 def get_min_acc(fn):
     return float(re.findall(r'\d+\.\d+', fn)[0])
@@ -85,7 +85,7 @@ def pQ_regex(mode):
     return (f'PatchQ_ma*_' + first_lvl_regex(mode))
 
 def final_rec_regex(mode):
-    return f'FR_{cfg.NET.__name__}_ps{cfg.PS}_ones{cfg.ONES_RANGE}_{rc.gran_dict[mode]}_ma{cfg.MAX_ACC_LOSS}'
+    return f'FR_{cfg.NET.__name__}_ps{cfg.PS}_ones{cfg.ONES_RANGE[0]}x{cfg.ONES_RANGE[1]}_{rc.gran_dict[mode]}_ma{cfg.MAX_ACC_LOSS}'
     
 def find_rec_filename(mode, record_type):
     if record_type==FIRST_LVL_REC:

@@ -9,7 +9,7 @@ import Record as rc
 import Config as cfg
 import NeuralNet as net
 import maskfactory as mf
-from util.data_import import CIFAR10_Test
+from util.data_import import CIFAR10_Test, CIFAR10_shape
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -30,7 +30,7 @@ class ChannelQuantizier():
         
             
         if out_rec is None:
-            self._generate_patterns(rec.mode)
+            self._generate_patterns(rec.mode,rec.layers_layout)
             self.output_rec.filename = 'ChannelQ_ma'+ str(min_acc) + '_' + rec.filename
         else:
             self.output_rec = out_rec
@@ -43,21 +43,20 @@ class ChannelQuantizier():
            return
        
         print('==> starting simulation. file will be saved to ' + self.output_rec.filename)
-        nn = net.NeuralNet(cfg.SP_MOCK)
+        nn = net.NeuralNet()
+        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
         _, test_acc, _ = nn.test(test_gen)
         print(f'==> Asserted test-acc of: {test_acc}\n')
         
         save_counter = 0
-        for layer in tqdm(range(st_point[0],len(cfg.LAYER_LAYOUT))):
+        for layer in tqdm(range(st_point[0],len(self.input))):
             for p_idx in tqdm(range(st_point[3], len(self.output_rec.all_patterns[layer]))):
                 st_point[3] = 0
-                sp_list = cfg.SP_MOCK
-                sp_list[layer] = (1, self.patch_size, torch.from_numpy(self.output_rec.all_patterns[layer][p_idx]))
-                nn.update_spatial(sp_list)
+                nn.net.strict_mask_update(update_ids=[layer], masks=[torch.from_numpy(self.output_rec.all_patterns[layer][p_idx])])
                 _, test_acc, _ = nn.test(test_gen)
                 ops_saved, ops_total = nn.net.num_ops()
-                self.output_rec.addRecord(ops_saved.item(), ops_total, test_acc, layer, 0, 0, p_idx)
+                self.output_rec.addRecord(ops_saved, ops_total, test_acc, layer, 0, 0, p_idx)
     
                 save_counter += 1
                 if save_counter > cfg.SAVE_INTERVAL:
@@ -70,30 +69,30 @@ class ChannelQuantizier():
     def save_state(self):
         rc.save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
         
-    def _generate_patterns(self, mode):                
-        self.output_rec = rc.Record(0,0,False, mode, 0, None , \
+    def _generate_patterns(self, mode, layers_layout):                
+        self.output_rec = rc.Record(layers_layout,0,False, mode, 0, None , \
                                     (len(self.input),[1]*len(self.input),[1]*len(self.input),None))
-        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(mode)
+        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(mode, layers_layout)
         self.output_rec._create_results()
        
 #    
-    def _gen_patterns_zip_longest(self,mode):
+    def _gen_patterns_zip_longest(self,mode, layers_layout):
         all_patterns = []
         no_of_patterns = 0
         input_new = []
         no_of_patterns = [None]*len(self.input)
         for l in range(len(self.input)):
             layers = []
-            input_new.append([self.input[l][c][0] for c in range(cfg.LAYER_LAYOUT[l][0])])
+            input_new.append([self.input[l][c][0] for c in range(layers_layout[l][0])])
             for layer_opt in zip_longest(*input_new[l], fillvalue=(-1,-1,-1)):
-                layer = np.ones(cfg.LAYER_LAYOUT[l], dtype=self.default_in_pattern.dtype)
+                layer = np.ones(layers_layout[l], dtype=self.default_in_pattern.dtype)
                 for idx, opt in enumerate(layer_opt):
                     if opt[0] == -1:
-                        layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.default_in_pattern, False)
+                        layer[idx,:,:] = mf.tile_opt((layers_layout[l][1],layers_layout[l][2]),self.default_in_pattern, False)
                     elif mode == rc.max_granularity:
-                        layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.input_patterns[l][idx][opt[0]], False)
+                        layer[idx,:,:] = mf.tile_opt((layers_layout[l][1],layers_layout[l][2]),self.input_patterns[l][idx][opt[0]], False)
                     else:
-                        layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.input_patterns[:,:,opt[0]], False)
+                        layer[idx,:,:] = mf.tile_opt((layers_layout[l][1],layers_layout[l][2]),self.input_patterns[:,:,opt[0]], False)
                 layers.append(layer)
             no_of_patterns[l] = len(layers)
             all_patterns.append(layers)

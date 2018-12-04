@@ -4,8 +4,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as tf
-from src.util.torch import net_summary
-from src.util.gen import banner
+from util.torch import net_summary
+from util.gen import banner
 import numpy as np
 
 

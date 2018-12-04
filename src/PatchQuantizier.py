@@ -9,7 +9,7 @@ import Record as rc
 import Config as cfg
 import NeuralNet as net
 import maskfactory as mf
-from util.data_import import CIFAR10_Test
+from util.data_import import CIFAR10_Test, CIFAR10_shape
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -28,7 +28,7 @@ class PatchQuantizier():
             self.default_in_pattern = default_in_pattern  
             
         if out_rec is None:
-            self._generate_patterns(rec.mode)
+            self._generate_patterns(rec.mode,rec.layers_layout)
             self.output_rec.filename = 'PatchQ_ma'+ str(min_acc) + '_' + rec.filename
         else:
             self.output_rec = out_rec
@@ -41,27 +41,28 @@ class PatchQuantizier():
            return
        
         print('==> starting simulation. file will be saved to ' + self.output_rec.filename)
-        nn = net.NeuralNet(cfg.SP_MOCK)
+        nn = net.NeuralNet()
+        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
         _, test_acc, _ = nn.test(test_gen)
         print(f'==> Asserted test-acc of: {test_acc}\n')
         
         save_counter = 0
-        for l in tqdm(range(st_point[0],len(cfg.LAYER_LAYOUT))):
+        for l in tqdm(range(st_point[0],len(self.input))):
             for c in tqdm(range(st_point[1],len(self.output_rec.all_patterns[l]))):
                 st_point[1]=0
                 for p_idx in tqdm(range(st_point[3], len(self.output_rec.all_patterns[l][c]))):
                     st_point[3] = 0
-                    sp_list = cfg.SP_MOCK
+                    
                     if self.output_rec.mode == rc.uniform_filters:
-                        mask = mf.tile_opt(cfg.LAYER_LAYOUT[l], self.output_rec.all_patterns[l][c][p_idx], True)
+                        mask = mf.tile_opt(self.output_rec.layers_layout[l], self.output_rec.all_patterns[l][c][p_idx], True)
                     else:
-                        mask = np.ones(cfg.LAYER_LAYOUT[l], dtype = self.default_in_pattern.dtype)
-                    sp_list[l] = (1, self.patch_size, torch.from_numpy(mask))
-                    nn.update_spatial(sp_list)
+                        mask = np.ones(self.output_rec.layers_layout[l], dtype = self.default_in_pattern.dtype)
+                    
+                    nn.net.strict_mask_update(update_ids=[l], masks=[torch.from_numpy(mask)])
                     _, test_acc, _ = nn.test(test_gen)
                     ops_saved, ops_total = nn.net.num_ops()
-                    self.output_rec.addRecord(ops_saved.item(), ops_total, test_acc, l, c, 0, p_idx)
+                    self.output_rec.addRecord(ops_saved, ops_total, test_acc, l, c, 0, p_idx)
         
                     save_counter += 1
                     if save_counter > cfg.SAVE_INTERVAL:
@@ -76,26 +77,26 @@ class PatchQuantizier():
     def save_state(self):
         rc.save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
         
-    def _generate_patterns(self, mode):                
-        self.output_rec = rc.Record(0,0,False, mode, 0, None , \
+    def _generate_patterns(self, mode, layers_layout):                
+        self.output_rec = rc.Record(layers_layout,0,False, mode, 0, None , \
                                     (len(self.input),[1]*len(self.input),[1]*len(self.input),None))
-        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest()
+        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(layers_layout)
         self.output_rec.no_of_channels = [len(c) for c in self.output_rec.all_patterns]
         self.output_rec._create_results()
        
 #    
-    def _gen_patterns_zip_longest(self):
+    def _gen_patterns_zip_longest(self, layers_layout):
         all_patterns = []
-        no_of_patterns = [None]*len(cfg.LAYER_LAYOUT)
+        no_of_patterns = [None]*len(self.input)
         for l in range(len(self.input)):
             layers = []
             no_of_patterns[l] = [0]*len(self.input[l])
             for c in range(len(self.input[l])):
                 channels = []
                 for channel_opt in zip_longest(*self.input[l][c], fillvalue=(-1,-1,-1)):
-                    channel = np.ones((cfg.LAYER_LAYOUT[l][1], cfg.LAYER_LAYOUT[l][2]), dtype=self.input_patterns.dtype)
+                    channel = np.ones((layers_layout[l][1], layers_layout[l][2]), dtype=self.input_patterns.dtype)
                     for patch_idx, opt in enumerate(channel_opt):
-                        patch_n, patch_m = mf.get_patch_indexes(patch_idx, cfg.LAYER_LAYOUT[l][1], self.actual_patch_sizes[l])
+                        patch_n, patch_m = mf.get_patch_indexes(patch_idx, layers_layout[l][1], self.actual_patch_sizes[l])
                         p = self.input_patterns[:,:,opt[0]]
                         if (self.actual_patch_sizes[l] != self.patch_size):
                             p = mf.tile_opt((self.actual_patch_sizes[l],self.actual_patch_sizes[l]), p, False)
