@@ -190,6 +190,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size):
 
+        self.spatial_params = None # Destroy any reminders - if we are possibly using this net on another dataset. 
         # From init phase and on, set the spatial sizes so it won't affect the total ops.
         self.spatial_params = self.generate_spatial_sizes(x_shape)
 
