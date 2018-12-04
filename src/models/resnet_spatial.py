@@ -140,7 +140,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
             for block in layer:
                 self.spatial_layers.append(block.pred1)
                 self.spatial_layers.append(block.pred2)
-        self.spatial_params = None  # Will be set on first init of spatial layers
+        self.spatial_params = None  # Will be set on first init of spatial layers - is a tuple
 
     def forward(self, x):
         out = self.conv1(x)
@@ -246,7 +246,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
 
         if self.spatial_params is None:  # Spatial layers were not init, so no problem with ops
             summary = net_summary(self, x_shape, device=str(self.device), print_it=False)
-            spatial_params = [value['input_shape'][1:] for key, value in summary.items() if key.startswith('Spatial')]
+            spatial_params = tuple(tuple(value['input_shape'][1:]) for key, value in summary.items() if key.startswith('Spatial'))
             assert len(spatial_params) == self.num_spatial_layers()
             return spatial_params
         else:

@@ -147,7 +147,7 @@ def gen_first_lvl_results_main(mode):
         sp_list[layer] = (1, cfg.PS, cfg.BATCH_SIZE, torch.from_numpy(mask))
         nn.update_spatial(sp_list)
         # Todo - Invalid lines
-        # Correct line: 
+        # Correct line:
         nn.net.strict_mask_update(update_ids=[layer], masks=[torch.from_numpy(mask)])
 
         _, test_acc, _ = nn.test(test_gen)
