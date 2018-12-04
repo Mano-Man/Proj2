@@ -89,7 +89,7 @@ class Record():
             self.all_patterns = argv[0]
             self.no_of_layers,self.no_of_channels, self.no_of_patches, self.no_of_patterns = argv[1]
 
-        self.filename = gran_dict[self.mode]+ '_acc' + str(initial_acc) + '_mg' + str(gran_thresh) + '_' + str(int(time.time()))
+        self.filename = gran_dict[self.mode]+ '_acc' + str(initial_acc) + '_mg' + str(round(gran_thresh,0)) + '_' + str(int(time.time()))
     
     def _create_results(self):
         self.results = []
@@ -177,7 +177,7 @@ class FinalResultRc():
         self.ops_saved = ops_saved
         self.total_ops = tot_ops
         self.mode = mode
-        self.min_acc = max_acc_loss
+        self.max_acc_loss = max_acc_loss
         self.patch_size = ps
         self.ones_range = ones_range
         self.network = net_name

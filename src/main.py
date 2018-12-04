@@ -80,40 +80,44 @@ def training_main():
 #                                         To be migrated to Optimizer
 # ----------------------------------------------------------------------------------------------------------------------
 
+def quantizier_main(Quantizier, in_rec, rec_type):
+    init_acc = rf.get_init_acc(in_rec.filename)
+    q_rec_fn =  rf.find_rec_filename(in_rec.mode,rec_type)
+    if q_rec_fn is None:
+        quantizier = Quantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
+    else:
+        quantizier = Quantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS,None, \
+                             rc.load_from_file(q_rec_fn, ''))
+    quantizier.simulate()
+    return quantizier.output_rec
+	
 def by_uniform_layers():
     in_rec = gen_first_lvl_results_main(rc.uniform_layer)
-    lQ_rec = lQ_main(in_rec)
+    lQ_rec = quantizier_main(LayerQuantizier,in_rec,rf.lQ_REC)
     min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
 
 def by_uniform_patches():
     in_rec = gen_first_lvl_results_main(rc.uniform_patch)
-    cQ_rec = cQ_main(in_rec)
-    lQ_rec = lQ_main(cQ_rec)
+    cQ_rec = quantizier_main(ChannelQuantizier,in_rec,rf.cQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier,cQ_rec,rf.lQ_REC)
     min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
-
-def cQ_main(in_rec):
-    init_acc = rf.get_init_acc(in_rec.filename)
-    cQ_rec_fn = rf.find_rec_filename(in_rec.mode, rf.cQ_REC)
-    if cQ_rec_fn is None:
-        cQ = ChannelQuantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS)
-    else:
-        cQ = ChannelQuantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS, None, \
-                               rc.load_from_file(cQ_rec_fn, ''))
-    cQ.simulate()
-    return cQ.output_rec
-
-def lQ_main(in_rec):
-    init_acc = rf.get_init_acc(in_rec.filename)
-    lQ_rec_fn = rf.find_rec_filename(in_rec.mode, rf.lQ_REC)
-    if lQ_rec_fn is None:
-        lQ = LayerQuantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS)
-    else:
-        lQ = LayerQuantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS, None, \
-                             rc.load_from_file(lQ_rec_fn, ''))
-    lQ.simulate()
-    return lQ.output_rec
+	
+def by_uniform_filters():
+    in_rec = gen_first_lvl_results_main(rc.uniform_filters)
+    pQ_rec = quantizier_main(PatchQuantizier,in_rec, rf.pQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier,pQ_rec,rf.lQ_REC)
+    min_acc = rf.get_min_acc(lQ_rec.filename)
+    rf.print_best_results(lQ_rec, min_acc)
+	
+def by_max_granularity():
+    in_rec = gen_first_lvl_results_main(rc.uniform_filters)
+    pQ_rec = quantizier_main(PatchQuantizier,in_rec, rf.pQ_REC)
+    cQ_rec = quantizier_main(ChannelQuantizier, pQ_rec, rf.cQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier,cQ_rec,rf.lQ_REC)
+    min_acc = rf.get_min_acc(lQ_rec.filename)
+    rf.print_best_results(lQ_rec, min_acc)
 
 def gen_first_lvl_results_main(mode):
     rec_filename = rf.find_rec_filename(mode, rf.FIRST_LVL_REC)

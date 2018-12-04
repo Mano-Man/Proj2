@@ -79,7 +79,13 @@ def gen_varied_masks(N, M, patch_size, min_ones, max_ones,max_opt):
             for jj in range(patch_m):
                 mask[ii*patch_size:ii*patch_size+patch_size, jj*patch_size:jj*patch_size+patch_size] = all_patches[:,:,patch_tiling[ii,jj]]
         yield mask
-        
+       
+def get_patch_indexes(index, N, patch_size):
+        patch_n = math.ceil(N/patch_size)
+        ii_start = int(index/patch_n)
+        jj_start = index - ii_start*patch_n
+        return ii_start, jj_start
+
 def change_one_patch2d(mask, patch_n, patch_m, patch_size, p):
     mask[patch_n*patch_size:patch_n*patch_size+patch_size, patch_m*patch_size:patch_m*patch_size+patch_size] = p
     return mask

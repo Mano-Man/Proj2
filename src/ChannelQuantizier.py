@@ -21,10 +21,13 @@ class ChannelQuantizier():
         self.input_patterns = rec.all_patterns
         self.input = rec.gen_pattern_lists(min_acc)
         
-        if default_in_pattern is None:
-            self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
+        if default_in_pattern is not None:
+            self.default_in_pattern = default_in_pattern
+        elif rec.mode == rc.max_granularity:
+            self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0][0].dtype)
         else:
-            self.default_in_pattern = default_in_pattern  
+            self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
+        
             
         if out_rec is None:
             self._generate_patterns(rec.mode)
@@ -70,11 +73,11 @@ class ChannelQuantizier():
     def _generate_patterns(self, mode):                
         self.output_rec = rc.Record(0,0,False, mode, 0, None , \
                                     (len(self.input),[1]*len(self.input),[1]*len(self.input),None))
-        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest()
+        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(mode)
         self.output_rec._create_results()
        
 #    
-    def _gen_patterns_zip_longest(self):
+    def _gen_patterns_zip_longest(self,mode):
         all_patterns = []
         no_of_patterns = 0
         input_new = []
@@ -83,12 +86,14 @@ class ChannelQuantizier():
             layers = []
             input_new.append([self.input[l][c][0] for c in range(cfg.LAYER_LAYOUT[l][0])])
             for layer_opt in zip_longest(*input_new[l], fillvalue=(-1,-1,-1)):
-                layer = np.ones(cfg.LAYER_LAYOUT[l], dtype=self.input_patterns.dtype)
+                layer = np.ones(cfg.LAYER_LAYOUT[l], dtype=self.default_in_pattern.dtype)
                 for idx, opt in enumerate(layer_opt):
-                    if opt[0] >= 0 :
-                        layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.input_patterns[:,:,opt[0]], False)
-                    else:
+                    if opt[0] == -1:
                         layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.default_in_pattern, False)
+                    elif mode == rc.max_granularity:
+                        layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.input_patterns[l][idx][opt[0]], False)
+                    else:
+                        layer[idx,:,:] = mf.tile_opt((cfg.LAYER_LAYOUT[l][1],cfg.LAYER_LAYOUT[l][2]),self.input_patterns[:,:,opt[0]], False)
                 layers.append(layer)
             no_of_patterns[l] = len(layers)
             all_patterns.append(layers)

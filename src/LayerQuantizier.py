@@ -28,6 +28,8 @@ class LayerQuantizier():
             self.default_in_pattern = default_in_pattern
         elif rec.mode == rc.uniform_layer: 
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
+        elif rec.mode == rc.uniform_filters:
+            self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0][0].dtype)
         else:
             self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0].dtype)
             
@@ -114,6 +116,8 @@ class LayerQuantizier():
                     pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.default_in_pattern)
                 elif mode == rc.uniform_layer:
                     pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx], self.input_patterns[:,:,opt[0]])
+                elif mode == rc.uniform_filters:
+                    pattern[idx] = mf.tile_opt(cfg.LAYER_LAYOUT[idx],self.input_patterns[idx][0][opt[0]])
                 else: 
                     pattern[idx] = self.input_patterns[idx][opt[0]]
             all_patterns.append(pattern)

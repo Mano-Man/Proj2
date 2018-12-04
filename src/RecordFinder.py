@@ -59,7 +59,11 @@ def get_init_acc(fn):
     return float(re.findall(r'\d+\.\d+', fn)[-1])
 
 def does_max_acc_loss_match(fn):
-    return (round(get_init_acc(fn)-get_min_acc(fn), len(str(cfg.MAX_ACC_LOSS).split('.')[-1]))==cfg.MAX_ACC_LOSS)
+    max_acc_loss_split = str(cfg.MAX_ACC_LOSS).split('.')
+    round_len = len(max_acc_loss_split[-1])
+    if len(max_acc_loss_split) == 1:
+        round_len = 0
+    return (round(get_init_acc(fn)-get_min_acc(fn), round_len)==cfg.MAX_ACC_LOSS)
 
 def cQ_regex(mode):
     regex = f'ChannelQ_ma*_'
@@ -71,9 +75,14 @@ def lQ_regex(mode):
     regex = f'LayerQ_ma*_'
     if mode==rc.uniform_patch:
         regex += cQ_regex(mode)
+    elif mode==rc.uniform_filters:
+        regex += pQ_regex(mode)
     else:
         regex += first_lvl_regex(mode)
     return regex
+
+def pQ_regex(mode):
+    return (f'PatchQ_ma*_' + first_lvl_regex(mode))
 
 def final_rec_regex(mode):
     return f'FR_{cfg.NET.__name__}_ps{cfg.PS}_ones{cfg.ONES_RANGE}_{rc.gran_dict[mode]}_ma{cfg.MAX_ACC_LOSS}'
@@ -85,6 +94,8 @@ def find_rec_filename(mode, record_type):
         return find_rec_file_by_time(cQ_regex(mode),True)
     elif record_type==lQ_REC:
         return find_rec_file_by_time(lQ_regex(mode),True)
+    elif record_type==pQ_REC:
+        return find_rec_file_by_time(pQ_regex(mode), True)
     elif record_type==FINAL_RESULT_REC:
         return find_rec_file_by_time(final_rec_regex(mode))
     else:
