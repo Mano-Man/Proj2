@@ -141,6 +141,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
                 self.spatial_layers.append(block.pred1)
                 self.spatial_layers.append(block.pred2)
         self.spatial_params = None  # Will be set on first init of spatial layers - is a tuple
+        self.x_shape = None  # Will bet set
 
     def forward(self, x):
         out = self.conv1(x)
@@ -156,9 +157,9 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
         out = self.linear(out)
         return out
 
-    def summary(self,x_shape,print_it=True):
-
-        if self.spatial_params is None: #Layers were never init
+    def summary(self, x_shape, print_it=True):
+        # TODO - Add this as to an abstract class (PytorchNet) s.t. PytorchNet inherit from nn.Module, and SpatialNet inherits from PytorchNet
+        if self.spatial_params is None:  # Layers were never init
             return net_summary(self, x_shape, device=str(self.device), print_it=print_it)
         else:
             enabled = self.enabled_layers()
@@ -168,11 +169,12 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
             return summary
 
     def reset_ops(self):
+        # TODO - Add this as to an abstract class (SpatialNet)
         for sp in self.spatial_layers:
             sp.reset_ops()
 
     def num_ops(self):
-
+        # TODO - Add this as to an abstract class (SpatialNet)
         ops_saved = 0
         total_ops = 0
         for sp in self.spatial_layers:
@@ -181,6 +183,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
         return ops_saved, total_ops
 
     def print_ops_summary(self):
+        # TODO - Add this as to an abstract class (SpatialNet)
         for i, sp in enumerate(self.spatial_layers):
             if sp.total_ops == 0:
                 print(f'Spatial Layer {i}: Ops saved: {sp.ops_saved}/{sp.total_ops}')
@@ -190,33 +193,34 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size):
 
-        self.spatial_params = None # Destroy any reminders - if we are possibly using this net on another dataset. 
-        # From init phase and on, set the spatial sizes so it won't affect the total ops.
+        # TODO - Add this as to an abstract class (SpatialNet)
+        # From init phase and on, set the spatial sizes
+        self.x_shape = x_shape
         self.spatial_params = self.generate_spatial_sizes(x_shape)
 
         for i, layer in enumerate(self.spatial_layers):
             layer.init_to_input(p_size=p_size, batch_size=batch_size, in_shape=self.spatial_params[i],
                                 use_cuda=self.use_cuda)
 
-    def num_spatial_layers(self):
+    def num_spatial_layers(self):  # TODO - Add this as to an abstract class (SpatialNet)
         return len(self.spatial_layers)
 
-    def enabled_layers(self):
+    def enabled_layers(self):  # TODO - Add this as to an abstract class (SpatialNet)
         return [i for i in range(self.num_spatial_layers()) if self.spatial_layers[i].enable]
 
-    def disabled_layers(self):
+    def disabled_layers(self):  # TODO - Add this as to an abstract class (SpatialNet)
         return [i for i in range(self.num_spatial_layers()) if not self.spatial_layers[i].enable]
 
-    def enable_spatial_layers(self, idx_list):
+    def enable_spatial_layers(self, idx_list):  # TODO - Add this as to an abstract class (SpatialNet)
         for resurrected in idx_list:
             self.spatial_layers[resurrected].set_enable(True)
 
-    def disable_spatial_layers(self,idx_list):
+    def disable_spatial_layers(self, idx_list):  # TODO - Add this as to an abstract class (SpatialNet)
         for goner_id in idx_list:
             self.spatial_layers[goner_id].set_enable(False)
 
     def print_spatial_status(self):
-
+        # TODO - Add this as to an abstract class (SpatialNet)
         init_status = ['-Initialized-' if sp.is_init else '-Uninitialized-' for sp in self.spatial_layers]
         enable_status = ['-Enabled-' if sp.enable else '-Disabled-' for sp in self.spatial_layers]
         mask_status = ['-Mask Not Set-' if sp.mask is None else '-Mask Set-' for sp in self.spatial_layers]
@@ -225,6 +229,7 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
             print(f'Spatial Layer {i}: {iS} {eS} {mS}')
 
     def strict_mask_update(self, update_ids, masks):
+        # TODO - Add this as to an abstract class (SpatialNet)
         # Turn on all the update ids
         self.lazy_mask_update(update_ids, masks)
 
@@ -232,22 +237,24 @@ class ResNetS(nn.Module):  # TODO - Add a prototype "Spatial" to this - so it mu
         disabled = [i for i in range(len(self.spatial_layers)) if i not in update_ids]
         self.disable_spatial_layers(disabled)
 
-
     def lazy_mask_update(self, update_ids, masks):
+        # TODO - Add this as to an abstract class (SpatialNet)
         for (i, mask) in zip(update_ids, masks):
             self.spatial_layers[i].set_mask(mask)
             self.spatial_layers[i].set_enable(True)
 
     def fill_masks_to_val(self, val):
+        # TODO - Add this as to an abstract class (SpatialNet)
         for layer in self.spatial_layers:
             layer.set_constant_mask(val)
             layer.set_enable(True)
 
     def generate_spatial_sizes(self, x_shape):
-
-        if self.spatial_params is None:  # Spatial layers were not init, so no problem with ops
+        # TODO - Add this as to an abstract class (SpatialNet)
+        if self.spatial_params is None or self.x_shape != tuple(x_shape):  # Spatial layers were not init or new dataset
             summary = net_summary(self, x_shape, device=str(self.device), print_it=False)
-            spatial_params = tuple(tuple(value['input_shape'][1:]) for key, value in summary.items() if key.startswith('Spatial'))
+            spatial_params = tuple(
+                tuple(value['input_shape'][1:]) for key, value in summary.items() if key.startswith('Spatial'))
             assert len(spatial_params) == self.num_spatial_layers()
             return spatial_params
         else:

@@ -8,7 +8,7 @@ import torch.nn
 # Utils:
 import os
 from tqdm import tqdm
-from util.data_import import CIFAR10_Test,CIFAR10_shape
+from util.data_import import CIFAR10_Test, CIFAR10_shape
 
 import Record as rc
 import maskfactory as mf
@@ -24,10 +24,8 @@ from ChannelQuantizier import ChannelQuantizier
 # ----------------------------------------------------------------------------------------------------------------------
 
 def info_main():
-    # TODO ~!~!~!~! INNA READ ME ~!~!~!~! TODO
-
     nn = NeuralNet()
-    x_shape = CIFAR10_shape() # (3,32,32)
+    x_shape = CIFAR10_shape()  # (3,32,32)
 
     # Global info - From Net Wrapper
     nn.summary(x_shape, print_it=True)
@@ -50,11 +48,13 @@ def info_main():
     # Generate a constant 1 value mask over all spatial nets - equivalent to SP_ZERO with 0 and SP_ONES with 1
     # This was implemented for any constant value
     print(nn.net.enabled_layers())
-    nn.net.fill_masks_to_val(1)
+    nn.net.fill_masks_to_val(0)
     print(nn.net.enabled_layers())
     print(nn.net.disabled_layers())
     nn.net.print_spatial_status()  # Now all are enabled, seeing the mask was set
     nn.train(epochs=1)  # Train to see all layers enabled performance
+    nn.net.print_ops_summary()
+    nn.net.reset_ops()
     nn.net.print_ops_summary()
     # Turns on ids [0,3,16] and turns off all others
     nn.net.strict_mask_update(update_ids=[0, 3, 16],
@@ -76,48 +76,54 @@ def training_main():
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                         To be migrated to Optimizer
 # ----------------------------------------------------------------------------------------------------------------------
 
 def quantizier_main(Quantizier, in_rec, rec_type):
     init_acc = rf.get_init_acc(in_rec.filename)
-    q_rec_fn =  rf.find_rec_filename(in_rec.mode,rec_type)
+    q_rec_fn = rf.find_rec_filename(in_rec.mode, rec_type)
     if q_rec_fn is None:
-        quantizier = Quantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS)
+        quantizier = Quantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS)
     else:
-        quantizier = Quantizier(in_rec,init_acc-cfg.MAX_ACC_LOSS ,cfg.PS,None, \
-                             rc.load_from_file(q_rec_fn, ''))
+        quantizier = Quantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS, None, \
+                                rc.load_from_file(q_rec_fn, ''))
     quantizier.simulate()
     return quantizier.output_rec
-	
+
+
 def by_uniform_layers():
     in_rec = gen_first_lvl_results_main(rc.uniform_layer)
-    lQ_rec = quantizier_main(LayerQuantizier,in_rec,rf.lQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier, in_rec, rf.lQ_REC)
     min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
 
+
 def by_uniform_patches():
     in_rec = gen_first_lvl_results_main(rc.uniform_patch)
-    cQ_rec = quantizier_main(ChannelQuantizier,in_rec,rf.cQ_REC)
-    lQ_rec = quantizier_main(LayerQuantizier,cQ_rec,rf.lQ_REC)
+    cQ_rec = quantizier_main(ChannelQuantizier, in_rec, rf.cQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_REC)
     min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
-	
+
+
 def by_uniform_filters():
     in_rec = gen_first_lvl_results_main(rc.uniform_filters)
-    pQ_rec = quantizier_main(PatchQuantizier,in_rec, rf.pQ_REC)
-    lQ_rec = quantizier_main(LayerQuantizier,pQ_rec,rf.lQ_REC)
+    pQ_rec = quantizier_main(PatchQuantizier, in_rec, rf.pQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier, pQ_rec, rf.lQ_REC)
     min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
-	
+
+
 def by_max_granularity():
     in_rec = gen_first_lvl_results_main(rc.uniform_filters)
-    pQ_rec = quantizier_main(PatchQuantizier,in_rec, rf.pQ_REC)
+    pQ_rec = quantizier_main(PatchQuantizier, in_rec, rf.pQ_REC)
     cQ_rec = quantizier_main(ChannelQuantizier, pQ_rec, rf.cQ_REC)
-    lQ_rec = quantizier_main(LayerQuantizier,cQ_rec,rf.lQ_REC)
+    lQ_rec = quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_REC)
     min_acc = rf.get_min_acc(lQ_rec.filename)
     rf.print_best_results(lQ_rec, min_acc)
+
 
 def gen_first_lvl_results_main(mode):
     rec_filename = rf.find_rec_filename(mode, rf.FIRST_LVL_REC)
