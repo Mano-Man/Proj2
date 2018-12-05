@@ -13,24 +13,23 @@ BATCH_SIZE = 128
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                Optimization Functionality
 # ----------------------------------------------------------------------------------------------------------------------
-TEST_SET_SIZE = 1000  # Max for CIFAR10 is 10000
-MAX_ACC_LOSS = 1.83
-
-PS = 2  # TODO - Check with other patch sizes (resnet_spatial implementation was changed)
-ONES_RANGE = (1, 3)  # Exclusive range
-
-GRAN_THRESH = 32 * 32  # 32*32 will do nothing. The smaller this is, the bigger the effect per patch we expect
+TEST_SET_SIZE = 10000  # Max for CIFAR10 is 10000
+#MAX_ACC_LOSS = 1.83
+#
+#PS = 2  # TODO - Check with other patch sizes (resnet_spatial implementation was changed)
+#ONES_RANGE = (1, 3)  # Exclusive range
+#
+#GRAN_THRESH = 32 * 32  # 32*32 will do nothing. The smaller this is, the bigger the effect per patch we expect
 
 # Complexity Config
-SAVE_INTERVAL = 300
+SAVE_INTERVAL = 100
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                   Data Import
 # ----------------------------------------------------------------------------------------------------------------------
-if 'google.colab' in sys.modules:
-    CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
-    RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
-    DO_DOWNLOAD = True
-else:
+CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
+RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
+DO_DOWNLOAD = True
+if 'google.colab' not in sys.modules:
     CHECKPOINT_DIR = './data/checkpoint/'
     RESULTS_DIR = './data/results/'
     DO_DOWNLOAD = False

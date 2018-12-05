@@ -11,9 +11,7 @@ from itertools import zip_longest
 
 from Record import Mode, Record, save_to_file
 import Config as cfg
-import NeuralNet as net
 import maskfactory as mf
-from util.data_import import CIFAR10_Test, CIFAR10_shape
 
 
 class ChannelQuantizier():
@@ -37,20 +35,8 @@ class ChannelQuantizier():
             self.output_rec = out_rec
         
             
-    def simulate(self):
-        
+    def simulate(self, nn, test_gen):
         st_point = self.output_rec.find_resume_point()
-        if None==st_point:
-           return
-       
-        nn = net.NeuralNet()
-        test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
-        _, test_acc, _ = nn.test(test_gen)
-        print(f'==> Asserted test-acc of: {test_acc}\n')
-        
-        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
-        _, test_acc, _ = nn.test(test_gen)
-        print(f'==> Asserted test-acc of: {test_acc}\n')
         
         save_counter = 0
         for layer in tqdm(range(st_point[0],len(self.input))):
@@ -67,7 +53,10 @@ class ChannelQuantizier():
                     save_counter = 0
         self.save_state()
         self.output_rec.save_to_csv(cfg.RESULTS_DIR)
-        print('==> finised ChannelQuantizier simulation.')    
+        print('==> finised ChannelQuantizier simulation.')  
+        
+    def is_finised(self):
+        return self.output_rec.find_resume_point() is None
         
     def save_state(self):
         save_to_file(self.output_rec, True, cfg.RESULTS_DIR)

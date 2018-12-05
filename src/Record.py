@@ -149,7 +149,7 @@ class Record():
         with gen_patches == True:
             layers_layout = ((64,32,32), (128,16,16), (256,8,8)) # this is a network with 3 predictions layers
                                                                  # (64,32,32) are the dimensions of the required mask in the 1st layer
-            rec = Record(layers_layout, cfg.GRAN_THRESH, True, max_granularity, 93.83, cfg.PS, cfg.ONES_RANGE)
+            rec = Record(layers_layout, GRAN_THRESH, True, max_granularity, 93.83, PS, ONES_RANGE)
         with gen_patches == False:
             patterns = ... # Data structure containing the 
             rec = Record(layers_layout, cfg.GRAN_THRESH, False, max_granularity, 93.83, patterns, \

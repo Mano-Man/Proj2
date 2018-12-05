@@ -7,9 +7,7 @@ Created on Wed Nov 28 21:22:47 2018
 
 from Record import Mode, Record, save_to_file
 import Config as cfg
-import NeuralNet as net
 import maskfactory as mf
-from util.data_import import CIFAR10_Test, CIFAR10_shape
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -34,21 +32,9 @@ class PatchQuantizier():
             self.output_rec = out_rec
         
             
-    def simulate(self):
-        
+    def simulate(self, nn, test_gen):       
         st_point = self.output_rec.find_resume_point()
-        if None==st_point:
-           return
-       
-        nn = net.NeuralNet()
-        test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
-        _, test_acc, _ = nn.test(test_gen)
-        print(f'==> Asserted test-acc of: {test_acc}\n')
-        
-        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
-        _, test_acc, _ = nn.test(test_gen)
-        print(f'==> Asserted test-acc of: {test_acc}\n')
-        
+
         save_counter = 0
         for l in tqdm(range(st_point[0],len(self.input))):
             for c in tqdm(range(st_point[1],len(self.output_rec.all_patterns[l]))):
@@ -74,7 +60,10 @@ class PatchQuantizier():
         self.output_rec.fill_empty()
         self.save_state()
         
-        print('==> finised PatchQuantizier simulation.')    
+        print('==> finised PatchQuantizier simulation.')
+        
+    def is_finised(self):
+        return self.output_rec.find_resume_point() is None
         
     def save_state(self):
         save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
