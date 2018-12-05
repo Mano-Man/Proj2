@@ -1,8 +1,7 @@
-import torch
+
 # Models: (There are many more)
 from models.resnet import ResNet18
 from models.resnet_spatial import ResNet18Spatial, ResNet34Spatial
-import Record as rc
 import sys
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                 Global Config
@@ -15,7 +14,6 @@ BATCH_SIZE = 128
 #                                                Optimization Functionality
 # ----------------------------------------------------------------------------------------------------------------------
 TEST_SET_SIZE = 1000  # Max for CIFAR10 is 10000
-MAX_POSSIBILITIES = 10001
 MAX_ACC_LOSS = 1.83
 
 PS = 2  # TODO - Check with other patch sizes (resnet_spatial implementation was changed)

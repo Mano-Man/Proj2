@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Nov 18 11:29:28 2018
-
-@author: Inna
-"""
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                     Imports
+# ----------------------------------------------------------------------------------------------------------------------
 from bitarray import bitarray
+from enum import Enum
 import numpy as np
 import pickle
 import math
@@ -12,15 +10,30 @@ import time
 import os
 import csv
 
-#Todo : add to saved files self.no_of_patterns
-gran_dict = {0:"max_granularity", 1:"uniform_filters", 2:"uniform_patch", 3:"uniform_layer"}
-max_granularity = 0
-uniform_filters = 1
-uniform_patch = 2
-uniform_layer = 3
+# ----------------------------------------------------------------------------------------------------------------------
+#                                              Granularity Modes Definition
+# ----------------------------------------------------------------------------------------------------------------------
 
+class Mode(Enum):
+    MAX_GRANULARITY = 0
+    UNIFORM_FILTERS = 1
+    UNIFORM_PATCH = 2
+    UNIFORM_LAYER = 3
+    
+gran_dict = {Mode.MAX_GRANULARITY:"max_granularity", 
+             Mode.UNIFORM_FILTERS:"uniform_filters", 
+             Mode.UNIFORM_PATCH:"uniform_patch", 
+             Mode.UNIFORM_LAYER:"uniform_layer"}
 
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                    Util Functions
+# ----------------------------------------------------------------------------------------------------------------------
 def bitmasks(n, m):
+    '''
+    generates all possiable bitmasks for:
+        n = length of bitmask
+        m = number of '1's in the generated bitmasks
+    '''
     if m < n:
         if m > 0:
             for x in bitmasks(n - 1, m - 1):
@@ -34,6 +47,11 @@ def bitmasks(n, m):
 
 
 def patches(patch_size, ones_range, mask_type=np.float32):
+    '''
+    generates all possible patches of size [patch_size x patch_size] with number of '1's in ones_range
+    ones_range is exclusive, i.e if ones_range==(1,3), patchs with one and two '1's will be generated,
+    while patches with 3 '1's will NOT.
+    '''
     n = patch_size * patch_size
     for m in range(*ones_range):
         for patch in bitmasks(n, m):
@@ -41,6 +59,20 @@ def patches(patch_size, ones_range, mask_type=np.float32):
 
 
 def all_patches_array(patch_size, ones_range, mask_type=np.float32):
+    '''
+    returns an array that contains all possible patches of size [patch_size x patch_size] 
+    with number of '1's in ones_range.
+    
+    ones_range is an exclusive tuple:
+        for example ones_range=(1,3) means patchs with one and two '1's will be generated,
+        while patches with 3 '1's will NOT.
+    
+    usage:
+        patterns = all_patches_array(patch_size, ones_range)
+        number_of_patterns = patterns.shape[2]
+        pattern_number_3 = patterns[:,:,3]
+        
+    '''
     all_patches = np.zeros((patch_size, patch_size, 1), dtype=mask_type)
     for p in patches(patch_size, ones_range, mask_type):
         all_patches = np.append(all_patches, p[:, :, np.newaxis], axis=2)
@@ -48,6 +80,9 @@ def all_patches_array(patch_size, ones_range, mask_type=np.float32):
 
 
 def actual_patch_size(N, M, patch_size, gran_thresh):
+    '''
+    returns new patch size, such that does not exceeds granularity threshold
+    '''
     granularity = (N * M) / (patch_size * patch_size)
     new_patch_size = patch_size
     while granularity > gran_thresh:
@@ -55,12 +90,79 @@ def actual_patch_size(N, M, patch_size, gran_thresh):
         granularity = (N * M) / (new_patch_size * new_patch_size)
     return new_patch_size
 
+def save_to_file(record, use_default=True, path='./data/results', filename=''):
+    '''
+    saving record to file using pickle library
+    if use_default==True, record should have a valid record.filename field
+    '''
+    if use_default:
+        filename = record.filename
+    if not os.path.isdir(path):
+        os.mkdir(path)
+    outfile = open(os.path.join(path, filename + '.pkl'), 'wb')
+    pickle.dump(record, outfile)
+    outfile.close()
 
+
+def load_from_file(filename, path='./data/results'):
+    '''
+    loads object from file using pickle library and returns the object
+    '''
+    infile = open(os.path.join(path, filename), 'rb')
+    record = pickle.load(infile)
+    infile.close()
+    return record
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                   Record Class
+# ----------------------------------------------------------------------------------------------------------------------
 class Record():
     '''
-    results[layer][channel][patch][pattern] = (ops_saved, total_ops,acc)
+    Class for storing simulation results. 
+    
+    Initializing: 
+        layers_layout - tuple of layer dimension tuples 
+            ((channels_1st_layer,rows_1st_layer,colums_1st_layer),
+             (channels_2nd_layer,rows_2nd_layer,colums_2nd_layer),... )  
+        gran_thresh -   relevant only in max_granularity mode.
+            if (rows_in_layer x colums_in_layer)/(patch_size x patch_size) > gran_thresh
+            patch_size is increased
+        gen_patches -   boolean
+            if True, all possiable patterns for patches are generated and stored at 
+            Record.all_patterns:
+                argv[0] should contain patch_size
+                argv[1] should contain ones_range, see details in all_patches_array function doc
+            if False,
+                argv[0] should contain all the patterns relevant for this Record. 
+                        argv[0] is stored at Record.all_patterns
+                argv[1] should contain a list of the format:
+                    [no_of_layers,no_of_channels,no_of_patches,no_of_patterns]
+                    where no_of_layers is an integer 
+                    no_of_channels, no_of_patches, no_of_patterns are lists of 
+                    no_of_layers length
+                IMPORTANT! when gen_patches==False, after init yot HAVE to 
+                call _create_results()
+        mode -          granularity mode
+        initial_acc -   initial accuracy of the model 
+    
+    Initializing Examples:
+        with gen_patches == True:
+            layers_layout = ((64,32,32), (128,16,16), (256,8,8)) # this is a network with 3 predictions layers
+                                                                 # (64,32,32) are the dimensions of the required mask in the 1st layer
+            rec = Record(layers_layout, cfg.GRAN_THRESH, True, max_granularity, 93.83, cfg.PS, cfg.ONES_RANGE)
+        with gen_patches == False:
+            patterns = ... # Data structure containing the 
+            rec = Record(layers_layout, cfg.GRAN_THRESH, False, max_granularity, 93.83, patterns, \
+                         [3, [64,128,256], [256,64,16], None])
+            rec.no_of_patterns = [10,10,10]
+            rec._create_results()   # IMPORTANT! when gen_patches==False, after init and after the 
+                                    # dimenstions (no_of_layers, no_of_channels, no_of_patches, no_of_patterns)
+                                    # are set yot HAVE to call _create_results()
+                                    
+    Simulation results are stored in Record.results:
+        Record.results[layer][channel][patch][pattern] = (ops_saved, total_ops, accuracy)
+               
     '''
-
     def __init__(self, layers_layout, gran_thresh, gen_patches, mode, initial_acc, *argv):
         self.mode = mode
         self.gran_thresh = gran_thresh
@@ -77,11 +179,11 @@ class Record():
                                   math.ceil(layers_layout[idx][2] / self.patch_sizes[idx]) for idx in
                                   range(self.no_of_layers)]
     
-            if mode == uniform_filters:
+            if mode == Mode.UNIFORM_FILTERS:
                 self.no_of_channels = [1] * self.no_of_layers
-            elif mode == uniform_patch:
+            elif mode == Mode.UNIFORM_PATCH:
                 self.no_of_patches = [1] * self.no_of_layers
-            elif mode == uniform_layer:
+            elif mode == Mode.UNIFORM_LAYER:
                 self.no_of_channels = [1] * self.no_of_layers
                 self.no_of_patches = [1] * self.no_of_layers
             self.no_of_patterns = [self.all_patterns.shape[2]]*self.no_of_layers
@@ -91,7 +193,7 @@ class Record():
             self.no_of_layers,self.no_of_channels, self.no_of_patches, self.no_of_patterns = argv[1]
 
         self.filename = gran_dict[self.mode]+ '_acc' + str(initial_acc) + '_mg' + str(round(gran_thresh,0)) + '_' + str(int(time.time()))
-    
+
     def _create_results(self):
         self.results = []
         for l in range(self.no_of_layers):
@@ -105,22 +207,15 @@ class Record():
                     channel.append(patch)
                 layer.append(channel)
             self.results.append(layer)
-            
-    def indexed_according_to_mode(self,layer, channel, patch_idx, pattern_idx):
-        if self.mode == uniform_filters:
-            channel = 0
-        elif self.mode == uniform_patch:
-            patch_idx = 0
-        elif self.mode == uniform_layer:
-            channel = 0
-            patch_idx = 0
-        return layer, channel, patch_idx, pattern_idx
-
+    
     def addRecord(self, op, tot_op, acc, layer, channel=0, patch_idx=0, pattern_idx=0):
-        layer, channel, patch_idx, pattern_idx = self.indexed_according_to_mode(layer, channel, patch_idx, pattern_idx)
         self.results[layer][channel][patch_idx][pattern_idx] = (op, tot_op, acc)
 
     def find_resume_point(self):
+        '''
+        returns list of format [layer,channel,patch,pattern] with the first 
+        indices for which simulation results were nor recorded
+        '''
         for layer in range(self.no_of_layers):
             for channel in range(self.no_of_channels[layer]):
                 for patch_idx in range(self.no_of_patches[layer]):
@@ -154,6 +249,9 @@ class Record():
                                                         self.results[l][k][j][i][2]])
             
     def gen_pattern_lists(self, min_acc):
+        '''
+        
+        '''
         slresults = []
         for l in range(self.no_of_layers):
             layer = []
@@ -170,6 +268,21 @@ class Record():
             slresults.append(layer)
         return slresults
     
+    
+            
+#    def _indexed_according_to_mode(self,layer, channel, patch_idx, pattern_idx):
+#        if self.mode == uniform_filters:
+#            channel = 0
+#        elif self.mode == uniform_patch:
+#            patch_idx = 0
+#        elif self.mode == uniform_layer:
+#            channel = 0
+#            patch_idx = 0
+#        return layer, channel, patch_idx, pattern_idx
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                               Final Result Record Class
+# ----------------------------------------------------------------------------------------------------------------------    
 class FinalResultRc():
     def __init__(self, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name):
         self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
@@ -183,36 +296,3 @@ class FinalResultRc():
         self.ones_range = ones_range
         self.network = net_name
 
-
-def save_to_file(record, use_default=True, path='./data/results', filename=''):
-    if use_default:
-        filename = record.filename
-    if not os.path.isdir(path):
-        os.mkdir(path)
-    outfile = open(os.path.join(path, filename + '.pkl'), 'wb')
-    pickle.dump(record, outfile)
-    outfile.close()
-
-
-def load_from_file(filename, path='./data/results'):
-    infile = open(os.path.join(path, filename), 'rb')
-    record = pickle.load(infile)
-    infile.close()
-    return record
-
-# -----------------Test---------------------
-# max_gra = 32*32
-# r = Record(Resnet18_layers_layout,max_gra,True, max_granularity,2,2,3)
-#
-# ap = all_patches_array(2,2,3)
-# r1 = Record(Resnet18_layers_layout,max_gra,False, max_granularity,ap)
-#
-# assert(r1.results ==r.results)
-#
-# r2 = Record(Resnet18_layers_layout,max_gra,True, uniform_filters,2,2,3)
-# r2.addRecord( 4, 0.98, 0, 0, 0, 0)
-# r2.save_to_csv()
-#           
-# save_to_file(r2)
-# r3 = load_from_file('uniform_filters_1542549224_mg1024')
-# assert(r2.results ==r3.results)

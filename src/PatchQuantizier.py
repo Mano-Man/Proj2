@@ -5,7 +5,7 @@ Created on Wed Nov 28 21:22:47 2018
 @author: Inna
 """
 
-import Record as rc
+from Record import Mode, Record, save_to_file
 import Config as cfg
 import NeuralNet as net
 import maskfactory as mf
@@ -56,7 +56,7 @@ class PatchQuantizier():
                 for p_idx in tqdm(range(st_point[3], len(self.output_rec.all_patterns[l][c]))):
                     st_point[3] = 0
                     
-                    if self.output_rec.mode == rc.uniform_filters:
+                    if self.output_rec.mode == Mode.UNIFORM_FILTERS:
                         mask = mf.tile_opt(self.output_rec.layers_layout[l], self.output_rec.all_patterns[l][c][p_idx], True)
                     else:
                         mask = np.ones(self.output_rec.layers_layout[l], dtype = self.default_in_pattern.dtype)
@@ -77,10 +77,10 @@ class PatchQuantizier():
         print('==> finised PatchQuantizier simulation.')    
         
     def save_state(self):
-        rc.save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
+        save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
         
     def _generate_patterns(self, mode, layers_layout):                
-        self.output_rec = rc.Record(layers_layout,0,False, mode, 0, None , \
+        self.output_rec = Record(layers_layout,0,False, mode, 0, None , \
                                     (len(self.input),[1]*len(self.input),[1]*len(self.input),None))
         self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(layers_layout)
         self.output_rec.no_of_channels = [len(c) for c in self.output_rec.all_patterns]

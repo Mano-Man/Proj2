@@ -4,16 +4,17 @@ Created on Wed Nov 28 21:22:47 2018
 
 @author: Inna
 """
-
-import Record as rc
-import Config as cfg
-import NeuralNet as net
-import maskfactory as mf
-from util.data_import import CIFAR10_Test, CIFAR10_shape
 from tqdm import tqdm
 import numpy as np
 import torch
 from itertools import zip_longest
+
+from Record import Mode, Record, save_to_file
+import Config as cfg
+import NeuralNet as net
+import maskfactory as mf
+from util.data_import import CIFAR10_Test, CIFAR10_shape
+
 
 class ChannelQuantizier():
     def __init__(self, rec, min_acc, patch_size, default_in_pattern=None, out_rec=None):
@@ -23,7 +24,7 @@ class ChannelQuantizier():
         
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
-        elif rec.mode == rc.max_granularity:
+        elif rec.mode == Mode.MAX_GRANULARITY:
             self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0][0].dtype)
         else:
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
@@ -69,10 +70,10 @@ class ChannelQuantizier():
         print('==> finised ChannelQuantizier simulation.')    
         
     def save_state(self):
-        rc.save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
+        save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
         
     def _generate_patterns(self, mode, layers_layout):                
-        self.output_rec = rc.Record(layers_layout,0,False, mode, 0, None , \
+        self.output_rec = Record(layers_layout,0,False, mode, 0, None , \
                                     (len(self.input),[1]*len(self.input),[1]*len(self.input),None))
         self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(mode, layers_layout)
         self.output_rec._create_results()
@@ -91,7 +92,7 @@ class ChannelQuantizier():
                 for idx, opt in enumerate(layer_opt):
                     if opt[0] == -1:
                         layer[idx,:,:] = mf.tile_opt((layers_layout[l][1],layers_layout[l][2]),self.default_in_pattern, False)
-                    elif mode == rc.max_granularity:
+                    elif mode == Mode.MAX_GRANULARITY:
                         layer[idx,:,:] = mf.tile_opt((layers_layout[l][1],layers_layout[l][2]),self.input_patterns[l][idx][opt[0]], False)
                     else:
                         layer[idx,:,:] = mf.tile_opt((layers_layout[l][1],layers_layout[l][2]),self.input_patterns[:,:,opt[0]], False)

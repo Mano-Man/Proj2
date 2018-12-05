@@ -10,7 +10,7 @@ import os
 from tqdm import tqdm
 from util.data_import import CIFAR10_Test, CIFAR10_shape
 
-import Record as rc
+from Record import Mode, Record, load_from_file, save_to_file
 import maskfactory as mf
 from NeuralNet import NeuralNet
 import Config as cfg
@@ -87,50 +87,49 @@ def training_main():
 def quantizier_main(Quantizier, in_rec, rec_type):
     init_acc = rf.get_init_acc(in_rec.filename)
     q_rec_fn = rf.find_rec_filename(in_rec.mode, rec_type)
-    if q_rec_fn is None:
+    if q_rec_fn is None or rf.lQ_RESUME == rec_type:
         quantizier = Quantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS)
     else:
         quantizier = Quantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS, None, \
-                                rc.load_from_file(q_rec_fn, ''))
+                                load_from_file(q_rec_fn, ''))
     quantizier.simulate()
-    if  rf.lQ_REC == rec_type:
+    if  rf.lQ_RESUME == rec_type:
         return
     return quantizier.output_rec
 
 
 def by_uniform_layers():
-    in_rec = gen_first_lvl_results_main(rc.uniform_layer)
-    quantizier_main(LayerQuantizier, in_rec, rf.lQ_REC)
-    rf.print_result(rc.uniform_layer)
+    in_rec = gen_first_lvl_results_main(Mode.UNIFORM_LAYER)
+    quantizier_main(LayerQuantizier, in_rec, rf.lQ_RESUME)
+    rf.print_result(Mode.UNIFORM_LAYER)
 
 
 def by_uniform_patches():
-    in_rec = gen_first_lvl_results_main(rc.uniform_patch)
+    in_rec = gen_first_lvl_results_main(Mode.UNIFORM_PATCH)
     cQ_rec = quantizier_main(ChannelQuantizier, in_rec, rf.cQ_REC)
-    quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_REC)
-    rf.print_result(rc.uniform_patch)
+    quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_RESUME)
+    rf.print_result(Mode.UNIFORM_PATCH)
 
 
 def by_uniform_filters():
-    in_rec = gen_first_lvl_results_main(rc.uniform_filters)
+    in_rec = gen_first_lvl_results_main(Mode.UNIFORM_FILTERS)
     pQ_rec = quantizier_main(PatchQuantizier, in_rec, rf.pQ_REC)
-    quantizier_main(LayerQuantizier, pQ_rec, rf.lQ_REC)
-    rf.print_result(rc.uniform_filters)
+    quantizier_main(LayerQuantizier, pQ_rec, rf.lQ_RESUME)
+    rf.print_result(Mode.UNIFORM_FILTERS)
 
 
 def by_max_granularity():
-    in_rec = gen_first_lvl_results_main(rc.uniform_filters)
+    in_rec = gen_first_lvl_results_main(Mode.MAX_GRANULARITY)
     pQ_rec = quantizier_main(PatchQuantizier, in_rec, rf.pQ_REC)
     cQ_rec = quantizier_main(ChannelQuantizier, pQ_rec, rf.cQ_REC)
-    lQ_rec = quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_REC)
-    min_acc = rf.get_min_acc(lQ_rec.filename)
-    rf.print_best_results(lQ_rec, min_acc)
+    quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_RESUME)
+    rf.print_result(Mode.MAX_GRANULARITY)
 
 
 def gen_first_lvl_results_main(mode):
     rec_filename = rf.find_rec_filename(mode, rf.FIRST_LVL_REC)
     if rec_filename is not None:
-        rcs = rc.load_from_file(rec_filename, path='')
+        rcs = load_from_file(rec_filename, path='')
         st_point = rcs.find_resume_point()
         if st_point == None:
             return rcs
@@ -148,7 +147,7 @@ def gen_first_lvl_results_main(mode):
 
 
     if rec_filename is None:  
-        rcs = rc.Record(layers_layout, cfg.GRAN_THRESH, True, mode, test_acc, cfg.PS, cfg.ONES_RANGE)
+        rcs = Record(layers_layout, cfg.GRAN_THRESH, True, mode, test_acc, cfg.PS, cfg.ONES_RANGE)
         st_point = [0] * 4
         rcs.filename = f'ps{cfg.PS}_ones{cfg.ONES_RANGE[0]}x{cfg.ONES_RANGE[1]}_{rcs.filename}'
 
@@ -166,10 +165,10 @@ def gen_first_lvl_results_main(mode):
 
         save_counter += 1
         if save_counter > cfg.SAVE_INTERVAL:
-            rc.save_to_file(rcs, True, cfg.RESULTS_DIR)
+            save_to_file(rcs, True, cfg.RESULTS_DIR)
             save_counter = 0
 
-    rc.save_to_file(rcs, True, cfg.RESULTS_DIR)
+    save_to_file(rcs, True, cfg.RESULTS_DIR)
     rcs.save_to_csv(cfg.RESULTS_DIR)
     print('==> Result saved to ' + os.path.join(cfg.RESULTS_DIR, rcs.filename))
     return rcs

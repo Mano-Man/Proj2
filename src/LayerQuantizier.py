@@ -4,18 +4,19 @@ Created on Mon Nov 26 19:51:55 2018
 
 @author: Inna
 """
-import Record as rc
+import numpy as np
+import torch
+
+from Record import Mode, FinalResultRc, load_from_file, save_to_file
 import Config as cfg
 import NeuralNet as net
 import RecordFinder as rf
 import maskfactory as mf
 from util.data_import import CIFAR10_Test,CIFAR10_shape
-import numpy as np
-import torch
-from itertools import product, islice
+
 
 class LayerQuantizier():
-    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None):
+    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None, out_rec=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.min_acc = min_acc
@@ -28,9 +29,9 @@ class LayerQuantizier():
         
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
-        elif rec.mode == rc.uniform_layer: 
+        elif rec.mode == Mode.UNIFORM_LAYER: 
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
-        elif rec.mode == rc.uniform_filters:
+        elif rec.mode == Mode.UNIFORM_FILTERS:
             self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0][0].dtype)
         else:
             self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0].dtype)
@@ -41,7 +42,7 @@ class LayerQuantizier():
             self.resume_index = [0]*len(self.input)
             self.is_final = [-1]*len(self.input)
         else:
-            self.resume_index, self.is_final = rc.load_from_file(resume_param_path, path='')
+            self.resume_index, self.is_final = load_from_file(resume_param_path, path='')
 
     def simulate(self):
         if self._is_finised():
@@ -65,8 +66,8 @@ class LayerQuantizier():
         _, test_acc, _ = nn.test(test_gen)
         ops_saved, ops_total = nn.net.num_ops()
         if test_acc >= self.min_acc:
-            self._save_final_rec(test_acc,ops_saved, ops_total)
-            return
+            f_rec = self._save_final_rec(test_acc,ops_saved, ops_total)
+            return f_rec
         
         l_to_inc = self._get_next_opt()
         while(l_to_inc is not None):
@@ -77,33 +78,36 @@ class LayerQuantizier():
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
             if test_acc >= self.min_acc:
-                self._save_final_rec(test_acc,ops_saved, ops_total)
-                return
+                f_rec = self._save_final_rec(test_acc,ops_saved, ops_total)
+                return f_rec
             l_to_inc = self._get_next_opt()
         
         print('==> finised LayerQuantizier simulation. Appropriate option NOT found!')
+        return None
                     
     def save_state(self):
-        rc.save_to_file((self.resume_index, self.is_final), False, cfg.RESULTS_DIR, self.resume_param_filename)
+        save_to_file((self.resume_index, self.is_final), False, cfg.RESULTS_DIR, self.resume_param_filename)
         
     def _update_layer(self, l_idx, p_idx):
         opt = self.input[l_idx][p_idx]
         if opt[0] == -1:
             self.sp_list[l_idx] = torch.from_numpy(mf.tile_opt(self.layers_layout[l_idx], self.default_in_pattern))
-        elif self.mode == rc.uniform_layer:
+        elif self.mode == Mode.UNIFORM_LAYER:
             self.sp_list[l_idx] = torch.from_numpy(mf.tile_opt(self.layers_layout[l_idx], self.input_patterns[:,:,opt[0]]))
-        elif self.mode == rc.uniform_filters:
+        elif self.mode == Mode.UNIFORM_FILTERS:
             self.sp_list[l_idx] = torch.from_numpy(mf.tile_opt(self.layers_layout[l_idx],self.input_patterns[l_idx][0][opt[0]]))
         else: 
             self.sp_list[l_idx] = torch.from_numpy(self.input_patterns[l_idx][opt[0]])
     
     def _save_final_rec(self,test_acc,ops_saved, ops_total):
-        f_rec = rc.FinalResultRc(test_acc,ops_saved, ops_total, self.mode, self.sp_list, \
+        f_rec = FinalResultRc(test_acc,ops_saved, ops_total, self.mode, self.sp_list, \
                                  cfg.PS,cfg.MAX_ACC_LOSS,cfg.ONES_RANGE, cfg.NET.__name__)
-        rc.save_to_file(f_rec,True,cfg.RESULTS_DIR)
+        save_to_file(f_rec,True,cfg.RESULTS_DIR)
         print('==> finished LayerQuantizier simulation!')
         print('==> result saved to ' + f_rec.filename)
+        self.is_final = [-2]*len(self.is_final)
         self.save_state()
+        return f_rec
         
     def _is_finised(self):
         return self.is_final==[-2]*len(self.is_final)
