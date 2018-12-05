@@ -40,10 +40,12 @@ class PatchQuantizier():
         if None==st_point:
            return
        
-        print('==> starting simulation. file will be saved to ' + self.output_rec.filename)
         nn = net.NeuralNet()
-        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
         test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD)
+        _, test_acc, _ = nn.test(test_gen)
+        print(f'==> Asserted test-acc of: {test_acc}\n')
+        
+        nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
         _, test_acc, _ = nn.test(test_gen)
         print(f'==> Asserted test-acc of: {test_acc}\n')
         

@@ -93,30 +93,29 @@ def quantizier_main(Quantizier, in_rec, rec_type):
         quantizier = Quantizier(in_rec, init_acc - cfg.MAX_ACC_LOSS, cfg.PS, None, \
                                 rc.load_from_file(q_rec_fn, ''))
     quantizier.simulate()
+    if  rf.lQ_REC == rec_type:
+        return
     return quantizier.output_rec
 
 
 def by_uniform_layers():
     in_rec = gen_first_lvl_results_main(rc.uniform_layer)
-    lQ_rec = quantizier_main(LayerQuantizier, in_rec, rf.lQ_REC)
-    min_acc = rf.get_min_acc(lQ_rec.filename)
-    rf.print_best_results(lQ_rec, min_acc)
+    quantizier_main(LayerQuantizier, in_rec, rf.lQ_REC)
+    rf.print_result(rc.uniform_layer)
 
 
 def by_uniform_patches():
     in_rec = gen_first_lvl_results_main(rc.uniform_patch)
     cQ_rec = quantizier_main(ChannelQuantizier, in_rec, rf.cQ_REC)
-    lQ_rec = quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_REC)
-    min_acc = rf.get_min_acc(lQ_rec.filename)
-    rf.print_best_results(lQ_rec, min_acc)
+    quantizier_main(LayerQuantizier, cQ_rec, rf.lQ_REC)
+    rf.print_result(rc.uniform_patch)
 
 
 def by_uniform_filters():
     in_rec = gen_first_lvl_results_main(rc.uniform_filters)
     pQ_rec = quantizier_main(PatchQuantizier, in_rec, rf.pQ_REC)
-    lQ_rec = quantizier_main(LayerQuantizier, pQ_rec, rf.lQ_REC)
-    min_acc = rf.get_min_acc(lQ_rec.filename)
-    rf.print_best_results(lQ_rec, min_acc)
+    quantizier_main(LayerQuantizier, pQ_rec, rf.lQ_REC)
+    rf.print_result(rc.uniform_filters)
 
 
 def by_max_granularity():
@@ -137,11 +136,15 @@ def gen_first_lvl_results_main(mode):
             return rcs
 
     nn = NeuralNet()
-    layers_layout = nn.net.generate_spatial_sizes(CIFAR10_shape())
-    nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
     test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD, max_dataset_size=cfg.TEST_SET_SIZE)
     _, test_acc, correct = nn.test(test_gen)
     print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
+    nn.net.initialize_spatial_layers(CIFAR10_shape(), cfg.BATCH_SIZE, cfg.PS)
+    print('gen another test')
+    test_gen = CIFAR10_Test(batch_size=cfg.BATCH_SIZE, download=cfg.DO_DOWNLOAD, max_dataset_size=cfg.TEST_SET_SIZE)
+    _, test_acc, correct = nn.test(test_gen)
+    print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
+    layers_layout = nn.net.generate_spatial_sizes(CIFAR10_shape())
 
 
     if rec_filename is None:  
@@ -174,3 +177,5 @@ def gen_first_lvl_results_main(mode):
 
 if __name__ == '__main__':
     by_uniform_layers()
+    by_uniform_patches()
+    by_uniform_filters()

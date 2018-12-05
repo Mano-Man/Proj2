@@ -101,7 +101,6 @@ class NeuralNet:
         banner('Training Phase - End')
 
     def test(self, data_gen):
-
         self.net.eval()
         test_loss = 0
         correct = 0
@@ -189,7 +188,7 @@ class NeuralNet:
         count = f'{correct}/{total}'
         return train_loss, total_acc, count
 
-    def _load_checkpoint(self, loaded_dict, optional_fill=['.*\.num_batches_tracked'], total_ignore=['.*pred\.']):
+    def _load_checkpoint(self, loaded_dict, optional_fill=['.*\.num_batches_tracked'], total_ignore=['.*pred\.','.*pred2\.','.*pred1\.']):
 
         # Make a regex that matches if any of our regexes match.
         opt_fill = "(" + ")|(".join(optional_fill) + ")"
