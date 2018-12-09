@@ -174,7 +174,10 @@ class Record():
             self.all_patterns = all_patches_array(argv[0], argv[1])  # [patch_size, ones_range]
             
             patch_size = self.all_patterns.shape[0]
-            self.patch_sizes = [actual_patch_size(l[1], l[2], patch_size, gran_thresh) for l in layers_layout]
+            if mode==Mode.MAX_GRANULARITY:
+                self.patch_sizes = [actual_patch_size(l[1], l[2], patch_size, gran_thresh) for l in layers_layout]
+            else:
+                self.patch_sizes = [patch_size] * self.no_of_layers
             self.no_of_patches = [math.ceil(layers_layout[idx][1] / self.patch_sizes[idx]) * \
                                   math.ceil(layers_layout[idx][2] / self.patch_sizes[idx]) for idx in
                                   range(self.no_of_layers)]
@@ -196,6 +199,7 @@ class Record():
 
     def _create_results(self):
         self.results = []
+        self.size = 0
         for l in range(self.no_of_layers):
             layer = []
             for k in range(self.no_of_channels[l]):
@@ -204,6 +208,7 @@ class Record():
                     patch = []
                     for i in range(self.no_of_patterns[l]):
                         patch.append(None)
+                        self.size += 1
                     channel.append(patch)
                 layer.append(channel)
             self.results.append(layer)
@@ -261,7 +266,8 @@ class Record():
                     patch = []
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
                         if res_tuple[2] > min_acc:
-                            patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                            #patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                            patch.append((p_idx,res_tuple[0]/res_tuple[1],res_tuple[2]))
                     patch.append((-1,-1,-1))
                     channel.append(patch)
                 layer.append(channel)
@@ -295,4 +301,37 @@ class FinalResultRc():
         self.patch_size = ps
         self.ones_range = ones_range
         self.network = net_name
+        
+    def print_rec(self):
+        string =  "================================================================\n"
+        string += " RESULT FOR:    {:>15} {:>10}\n".format(self.network, "CIFAR10")
+        string += "                {:>15}\n".format(gran_dict[self.mode])
+        string += "{:>15} {}\n".format("PATCH SIZE:", self.patch_size)
+        string += "{:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range(1))
+        string += "{:>15} {}\n".format("MAX ACC LOSS:", self.max_acc_loss)
+        string += "----------------------------------------------------------------\n"
+        string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}%\n"
+        string += f"           with accuracy of: {self.final_acc}%\n"
+        string += "================================================================\n"
+        return string
+        
+class BaselineResultRc():
+    def __init__(self, baseline_acc, ops_saved, tot_ops, ps, net_name):
+        self.filename = f'BS_{net_name}_ps{ps}_os{round((ops_saved/tot_ops)*100, 3)}_acc{baseline_acc}'
+        self.baseline_acc = baseline_acc
+        self.ops_saved = ops_saved
+        self.total_ops = tot_ops
+        self.patch_size = ps
+        self.network = net_name
+        
+    def __str__(self):
+        string =  "================================================================\n"
+        string += " BASELINE FOR:  {:>15} {:>10}\n".format(self.network, "CIFAR10")
+        string += "{:>15} {}\n".format("PATCH SIZE:", self.patch_size)
+        string += "----------------------------------------------------------------\n"
+        string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}% \n"
+        string += f"           with accuracy of: {self.baseline_acc}% \n"
+        string += "================================================================\n"
+        return string
+        
 

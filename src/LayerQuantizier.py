@@ -11,6 +11,18 @@ from Record import Mode, FinalResultRc, load_from_file, save_to_file
 import Config as cfg
 import maskfactory as mf
 
+class LayerQuantResumeRec():
+    def __init__(self,no_of_layers, input_length):
+        self.resume_index = [0]*(no_of_layers)
+        self.is_final = [-1]*(no_of_layers)
+        for layer, idx in enumerate(self.resume_index):
+            if idx==(input_length[layer]-1):
+                self.is_final[layer] = -2
+        self.curr_saved_ops = 0
+        self.curr_tot_ops = 0
+        self.curr_best_acc = 0
+        self.curr_best_mask = None
+
 
 class LayerQuantizier():
     def __init__(self, rec, min_acc, patch_size, max_acc_loss, ones_range, resume_param_path=None, default_in_pattern=None):
@@ -35,49 +47,55 @@ class LayerQuantizier():
         else:
             self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0].dtype)
             
-        self.resume_param_filename = 'RP_LayerQ_ma'+ str(min_acc) + '_' + rec.filename
+        self.resume_param_filename = 'LayerQ_ma'+ str(min_acc) + '_' + rec.filename
         
         if resume_param_path is None:
-            self.resume_index = [0]*len(self.input)
-            self.is_final = [-1]*len(self.input)
+            input_length = [len(self.input[layer]) for layer in range(len(self.input))]
+            self.resume_rec = LayerQuantResumeRec(len(self.input), input_length)
         else:
-            self.resume_index, self.is_final = load_from_file(resume_param_path, path='')
+            self.resume_rec = load_from_file(resume_param_path, path='')
+        
+        
 
     def simulate(self, nn, test_gen):
         
         print('==> starting LayerQuantizier simulation.')
         
         self.sp_list = [None]*len(self.input)
-        for l_idx, p_idx in enumerate(self.resume_index):
+        for l_idx, p_idx in enumerate(self.resume_rec.resume_index):
             self._update_layer( l_idx, p_idx)
                 
         nn.net.strict_mask_update(update_ids=list(range(len(self.layers_layout))), masks=self.sp_list)
         _, test_acc, _ = nn.test(test_gen)
         ops_saved, ops_total = nn.net.num_ops()
-        if test_acc >= self.min_acc:
-            f_rec = self._save_final_rec(test_acc,ops_saved, ops_total, nn.net.__name__)
-            return f_rec
+        nn.net.reset_ops()
+        self.save_state(test_acc,ops_saved, ops_total)
         
+        counter = 1
         l_to_inc = self._get_next_opt()
         while(l_to_inc is not None):
-            self.save_state()
-            self._update_layer(l_to_inc, self.resume_index[l_to_inc])
+            self._update_layer(l_to_inc, self.resume_rec.resume_index[l_to_inc])
                 
             nn.net.lazy_mask_update(update_ids=[l_to_inc], masks=[self.sp_list[l_to_inc]])
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
-            if test_acc >= self.min_acc:
-                f_rec = self._save_final_rec(test_acc,ops_saved, ops_total, nn.net.__name__)
-                return 
+            nn.net.reset_ops()
+            self.save_state(test_acc,ops_saved, ops_total)
             l_to_inc = self._get_next_opt()
-        
-        print('==> finised LayerQuantizier simulation. Appropriate option NOT found!')
+            counter += 1
+        self._save_final_rec()
+        print(f'==> finised LayerQuantizier simulation. iters:{counter}')
         
     def is_finised(self):
-        return self.is_final==[-2]*len(self.is_final)                
+        return self.resume_rec.is_final==[-2]*len(self.resume_rec.is_final)                
     
-    def save_state(self):
-        save_to_file((self.resume_index, self.is_final), False, cfg.RESULTS_DIR, self.resume_param_filename)
+    def save_state(self, test_acc, ops_saved, ops_total):
+        if test_acc >  self.min_acc and ops_saved > self.resume_rec.curr_saved_ops:
+            self.resume_rec.curr_best_acc = test_acc
+            self.resume_rec.curr_saved_ops = ops_saved
+            self.resume_rec.curr_tot_ops = ops_total
+            self.resume_rec.curr_best_mask = self.sp_list
+        save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
         
     def _update_layer(self, l_idx, p_idx):
         opt = self.input[l_idx][p_idx]
@@ -90,19 +108,20 @@ class LayerQuantizier():
         else: 
             self.sp_list[l_idx] = torch.from_numpy(self.input_patterns[l_idx][opt[0]])
     
-    def _save_final_rec(self,test_acc,ops_saved, ops_total, net_name):
-        f_rec = FinalResultRc(test_acc,ops_saved, ops_total, self.mode, self.sp_list, \
-                                 self.patch_size, self.max_acc_loss, self.ones_range, net_name)
+    def _save_final_rec(self):
+        f_rec = FinalResultRc(self.resume_rec.curr_best_acc, self.resume_rec.curr_saved_ops, 
+                              self.resume_rec.curr_tot_ops, self.mode, self.resume_rec.curr_best_mask, 
+                              self.patch_size, self.max_acc_loss, self.ones_range, cfg.NET.__name__)
         save_to_file(f_rec,True,cfg.RESULTS_DIR)
-        print('==> finished LayerQuantizier simulation!')
+        #print('==> finished LayerQuantizier simulation!')
         print('==> result saved to ' + f_rec.filename)
-        self.is_final = [-2]*len(self.is_final)
-        self.save_state()
+        self.resume_rec.is_final = [-2]*len(self.resume_rec.is_final)
+        save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
         return f_rec
         
     def _get_next_opt(self):
-        next_idx = self.is_final.copy()
-        for l,i in enumerate(self.resume_index):
+        next_idx = self.resume_rec.is_final.copy()
+        for l,i in enumerate(self.resume_rec.resume_index):
             if i+1 < (len(self.input[l])-1):
                 next_idx[l] = i+1
         for l,i in enumerate(next_idx):
@@ -110,12 +129,13 @@ class LayerQuantizier():
                 ops_diff = self.input[l][i][1]-self.input[l][i-1][1]
                 acc_diff = self.input[l][i-1][2]-self.input[l][i][2]
                 next_idx[l] = ops_diff*acc_diff
-        l_to_inc = next_idx.index(max(next_idx))
-        if self.is_final[l_to_inc] == -2:
+        #l_to_inc = next_idx.index(max(next_idx))
+        l_to_inc = max(reversed(range(len(next_idx))), key=next_idx.__getitem__)
+        if self.resume_rec.is_final[l_to_inc] == -2:
             return None
-        self.resume_index[l_to_inc] = self.resume_index[l_to_inc]+1
-        if self.resume_index[l_to_inc] == (len(self.input[l_to_inc])-1):
-            self.is_final[l_to_inc] = -2
+        self.resume_rec.resume_index[l_to_inc] = self.resume_rec.resume_index[l_to_inc]+1
+        if self.resume_rec.resume_index[l_to_inc] == (len(self.input[l_to_inc])-1):
+            self.resume_rec.is_final[l_to_inc] = -2
         return l_to_inc
         
     def _clean_input(self):

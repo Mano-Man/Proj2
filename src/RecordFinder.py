@@ -17,6 +17,7 @@ class RecordType(Enum):
     cQ_REC = 2
     lQ_RESUME = 3
     FINAL_RESULT_REC = 4
+    BASELINE_REC = 5
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                     Util Functions for Finding Records
@@ -41,6 +42,8 @@ class RecordFinder():
             return self._find_rec_file_by_time(self._pQ_regex(mode), True)
         elif record_type==RecordType.FINAL_RESULT_REC:
             return self._find_rec_file_by_time(self._final_rec_regex(mode))
+        elif record_type==RecordType.BASELINE_REC:
+            return self._find_rec_file_by_time(self._baseline_rec_regex())
         else:
             return None
 
@@ -49,8 +52,7 @@ class RecordFinder():
         if f_rec_fn is None:
             return
         f_rec = load_from_file(f_rec_fn, path='')
-        print(f'==> Result for {f_rec.network},    mode:{gran_dict[f_rec.mode]}:')
-        print(f'    operations saved: {round((f_rec.ops_saved/f_rec.total_ops)*100, 3)}% with accuracy of:{f_rec.final_acc}%')
+        print(f_rec)
             
     def _find_rec_file_by_time(self, regex, check_max_acc_loss=False): 
         rec_filename = glob.glob(f'{cfg.RESULTS_DIR}{regex}')
@@ -87,7 +89,7 @@ class RecordFinder():
         return regex
     
     def _lQ_resume_regex(self, mode):
-        regex = f'RP_LayerQ_ma*_'
+        regex = f'LayerQ_ma*_'
         if mode == Mode.UNIFORM_PATCH:
             regex += self._cQ_regex(mode)
         elif mode == Mode.UNIFORM_FILTERS:
@@ -101,5 +103,8 @@ class RecordFinder():
     
     def _final_rec_regex(self, mode):
         return f'FR_{self.net_name}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[mode]}_ma{self.max_acc_loss}*pkl'
+    
+    def _baseline_rec_regex(self):
+        return f'BS_{self.net_name}_ps{self.ps}_os*_acc*pkl'
 
       
