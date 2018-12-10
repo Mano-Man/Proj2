@@ -8,13 +8,10 @@ import torch.backends.cudnn as cudnn
 import re
 import os
 import glob
-import numpy as np
 import time
 import math
-from util.torch import net_summary
-from util.data_import import CIFAR10_Train
-from util.gen import Progbar, banner
 
+from util.gen import Progbar, banner
 import Config as cfg
 
 
@@ -36,21 +33,15 @@ class NeuralNet:
             self.device = torch.device('cpu')
             # torch.set_num_threads(4) # Presuming 4 cores
             print('WARNING: Found no valid GPU device - Running on CPU')
-
         # Build Model:
-        print(f'==> Building model {cfg.NET.__name__}')
+        print(f'==> Building model {cfg.NET.__name__} on the dataset {cfg.DATA_NAME}')
         self.net = cfg.NET(self.device)
 
         if cfg.RESUME_CHECKPOINT:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
             assert os.path.isdir(cfg.CHECKPOINT_DIR), 'Error: no checkpoint directory found!'
-            if cfg.RESUME_METHOD == 'Time':
-                ck_file = self._find_latest_checkpoint()
-            elif cfg.RESUME_METHOD == 'ValAcc':
-                ck_file = self._find_top_val_acc_checkpoint()
-            else:
-                raise AssertionError
 
+            ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD]()
             if ck_file is None:
                 print(f'Found no valid checkpoints for {cfg.NET.__name__}')
                 self.best_val_acc = 0
@@ -60,6 +51,8 @@ class NeuralNet:
                 self._load_checkpoint(checkpoint['net'])
                 self.best_val_acc = checkpoint['acc']
                 self.start_epoch = checkpoint['epoch']
+                if 'dataset' in checkpoint:  # TODO - Remove this checkup
+                    assert (cfg.DATA_NAME == checkpoint['dataset'])
                 print(f'==> Loaded model with val-acc of {self.best_val_acc}')
 
         else:
@@ -72,16 +65,17 @@ class NeuralNet:
         self.criterion = torch.nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=cfg.LEARN_RATE,
                                    momentum=0.9, weight_decay=5e-4)
+        self.train_gen, self.val_gen, self.classes = (None, None, None)
 
     def train(self, epochs):
 
         # Bring in Data
-        self.train_gen, self.val_gen, self.classes = CIFAR10_Train(batch_size=cfg.BATCH_SIZE,
+        self.train_gen, self.val_gen, self.classes = cfg.TRAIN_GEN(batch_size=cfg.BATCH_SIZE,
                                                                    dataset_size=cfg.TRAIN_SET_SIZE,
                                                                    download=cfg.DO_DOWNLOAD)
         p = Progbar(epochs)
         t_start = time.time()
-        batches_per_step = math.ceil(cfg.TRAIN_SET_SIZE/cfg.BATCH_SIZE)
+        batches_per_step = math.ceil(cfg.TRAIN_SET_SIZE / cfg.BATCH_SIZE)
         for epoch in range(self.start_epoch, self.start_epoch + epochs):
 
             if cfg.VERBOSITY > 0:
@@ -91,10 +85,12 @@ class NeuralNet:
             val_loss, val_acc, val_count = self.test(self.val_gen)
             if cfg.VERBOSITY > 0:
                 t_step_end = time.time()
-                batch_time = round((t_step_end-t_step_start)/batches_per_step, 3)
-                p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),("batch_time", batch_time)])
+                batch_time = round((t_step_end - t_step_start) / batches_per_step, 3)
+                p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),
+                                 ("batch_time", batch_time)])
             else:
-                p.add(1,values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
+                p.add(1,
+                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
             self._checkpoint(val_acc, epoch + 1)
         t_end = time.time()
         print(f'==> Total train time: {t_end-t_start:.3f} secs :: per epoch: {(t_end-t_start)/epochs:.3f} secs')
@@ -105,7 +101,7 @@ class NeuralNet:
         test_loss = 0
         correct = 0
         total = 0
-        with torch.no_grad():
+        with torch.no_grad():  # TODO - Fix the odd intialize spatial layers bug
             for batch_idx, (inputs, targets) in enumerate(data_gen):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 outputs = self.net(inputs)
@@ -126,13 +122,13 @@ class NeuralNet:
         return test_loss, test_acc, count
 
     def summary(self, x_size, print_it=True):
-        #TODO - Make summary part of an interface
-        return self.net.summary(x_size,print_it=print_it)
+        return self.net.summary(x_size, print_it=print_it)
 
     def print_weights(self):
-        banner('Weights')
-        for i, weights in enumerate(list(self.net.parameters())):
-            print(f'Layer {i} :: weight shape: {list(weights.size())}')
+        self.net.print_weights()
+
+    def output_size(self, x_shape):
+        return self.net.output_size(x_shape)
 
     def _checkpoint(self, val_acc, epoch):
 
@@ -150,6 +146,7 @@ class NeuralNet:
             print(f'\nBeat val_acc record of {self.best_val_acc} with {val_acc} - Saving checkpoint')
             state = {
                 'net': self.net.state_dict(),
+                'dataset': cfg.DATA_NAME,
                 'acc': val_acc,
                 'epoch': epoch,
             }
@@ -188,7 +185,8 @@ class NeuralNet:
         count = f'{correct}/{total}'
         return train_loss, total_acc, count
 
-    def _load_checkpoint(self, loaded_dict, optional_fill=['.*\.num_batches_tracked'], total_ignore=['.*pred\.','.*pred2\.','.*pred1\.']):
+    def _load_checkpoint(self, loaded_dict, optional_fill=('.*\.num_batches_tracked',),
+                         total_ignore=('.*pred\.', '.*pred2\.', '.*pred1\.')):
 
         # Make a regex that matches if any of our regexes match.
         opt_fill = "(" + ")|(".join(optional_fill) + ")"
@@ -236,3 +234,9 @@ class NeuralNet:
             checkpoints.sort(key=os.path.getmtime)
             # print(checkpoints)
             return checkpoints[-1]
+
+    # Static Variables
+    resume_methods = {
+        'Time': _find_latest_checkpoint.__func__,
+        'ValAcc': _find_top_val_acc_checkpoint.__func__
+    }

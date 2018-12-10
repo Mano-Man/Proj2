@@ -1,8 +1,107 @@
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                     Imports
+# ----------------------------------------------------------------------------------------------------------------------
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as tf
+from .SpatialNet import Spatial, SpatialNet
+from util.gen import banner
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                    NN Spatial Configurations
+# ----------------------------------------------------------------------------------------------------------------------
+def ResNet18Spatial(device, **kwargs):
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, **kwargs)
 
 
+def ResNet34Spatial(device, **kwargs):
+    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, **kwargs)
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                     Spatial Version
+# ----------------------------------------------------------------------------------------------------------------------
+class BasicBlockS(nn.Module):
+    # Static Variable
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1):
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.shortcut = nn.Sequential()
+        self.pred1 = Spatial(planes)
+        self.pred2 = Spatial(planes)
+
+        if stride != 1 or in_planes != self.expansion * planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion * planes)
+            )
+
+    def forward(self, x):
+        out = tf.relu(self.bn1(self.conv1(x)))
+        out = self.pred1(out)
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = tf.relu(out)
+        out = self.pred2(out)
+        return out
+
+
+class ResNetS(SpatialNet):
+    def __init__(self, block, blocks_per_layer, device, num_classes=10):
+        super().__init__(device)
+
+        # ResNet Definitions:
+        self.in_planes = 64
+        self.blocks_per_layer = blocks_per_layer
+
+        # Net Structure: Spatial layers are turned off by default
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.pred = Spatial(64)
+        self.layer1 = self._populate_block(block, 64, blocks_per_layer[0], stride=1)
+        self.layer2 = self._populate_block(block, 128, blocks_per_layer[1], stride=2)
+        self.layer3 = self._populate_block(block, 256, blocks_per_layer[2], stride=2)
+        self.layer4 = self._populate_block(block, 512, blocks_per_layer[3], stride=2)
+        self.linear = nn.Linear(512 * block.expansion, num_classes)
+
+        # TODO - Override Super variable - Find some more elegant way to do this
+        self.spatial_layers = [self.pred]
+        for layer in (self.layer1, self.layer2, self.layer3, self.layer4):
+            for block in layer:
+                self.spatial_layers.append(block.pred1)
+                self.spatial_layers.append(block.pred2)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = tf.relu(out)
+        out = self.pred(out)
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = tf.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
+
+    def _populate_block(self, block, planes, num_blocks, stride):
+
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+    #                                                   Reguler Version
+# ----------------------------------------------------------------------------------------------------------------------
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -21,10 +120,10 @@ class BasicBlock(nn.Module):
             )
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = tf.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
-        out = F.relu(out)
+        out = tf.relu(out)
         return out
 
 
@@ -78,30 +177,30 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = tf.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
+        out = tf.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
 
 
-def ResNet18(*_):
+def ResNet18():
     return ResNet(BasicBlock, [2,2,2,2])
 
-def ResNet34(*_):
+def ResNet34():
     return ResNet(BasicBlock, [3,4,6,3])
 
-def ResNet50(*_):
+def ResNet50():
     return ResNet(Bottleneck, [3,4,6,3])
 
-def ResNet101(*_):
+def ResNet101():
     return ResNet(Bottleneck, [3,4,23,3])
 
-def ResNet152(*_):
+def ResNet152():
     return ResNet(Bottleneck, [3,8,36,3])
 
 
@@ -110,4 +209,4 @@ def test():
     y = net(torch.randn(1,3,32,32))
     print(y.size())
 
-# test()
+if __name__ == '__main__': test()
