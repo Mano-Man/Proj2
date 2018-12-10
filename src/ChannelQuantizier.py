@@ -45,7 +45,7 @@ class ChannelQuantizier():
                                           masks=[torch.from_numpy(self.output_rec.all_patterns[layer][p_idx])])
                 _, test_acc, _ = nn.test(test_gen)
                 ops_saved, ops_total = nn.net.num_ops()
-                nn.net.reset_spatial()
+                nn.net.reset_ops()
                 self.output_rec.addRecord(ops_saved, ops_total, test_acc, layer, 0, 0, p_idx)
 
                 save_counter += 1

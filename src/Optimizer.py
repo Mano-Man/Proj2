@@ -25,7 +25,6 @@ import Config as cfg
 # ----------------------------------------------------------------------------------------------------------------------
 class Optimizer:
     def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, calc_init_acc=True, init_acc=None):
-        self.record_finder = RecordFinder(cfg.NET.__name__, patch_size, ones_range, gran_thresh, max_acc_loss)
         self.nn = NeuralNet()
         self.test_gen = cfg.TEST_GEN(batch_size=cfg.BATCH_SIZE, max_dataset_size=cfg.TEST_SET_SIZE, download=cfg.DO_DOWNLOAD)
         self.test_set_size = cfg.TEST_SET_SIZE
@@ -35,6 +34,7 @@ class Optimizer:
             self.init_acc = test_acc  # TODO - Fix initialize bug 
         else:
             self.init_acc = init_acc
+        self.record_finder = RecordFinder(cfg.NET.__name__, patch_size, ones_range, gran_thresh, max_acc_loss, self.init_acc)
         self.ps = patch_size
         self.max_acc_loss = max_acc_loss
         self.gran_thresh = gran_thresh
@@ -70,7 +70,7 @@ class Optimizer:
                 quantizier = Quantizier(in_rec, self.init_acc, self.max_acc_loss, self.ps, 
                                         load_from_file(q_rec_fn, ''))
         if not quantizier.is_finised():
-            self.nn.net.reset_spatial()
+            self._init_nn()
             quantizier.simulate(self.nn, self.test_gen)
         if RecordType.lQ_RESUME == rec_type:
             return
@@ -195,7 +195,7 @@ class Optimizer:
                 return rcs
 
         layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
-        self.nn.net.reset_spatial()
+        self._init_nn()
 
         if rec_filename is None:
             rcs = Record(layers_layout, self.gran_thresh, True, mode, self.init_acc, self.ps, self.ones_range)
@@ -226,6 +226,7 @@ class Optimizer:
     def _init_nn(self):
         # TODO - Remove this
         self.nn.net.disable_spatial_layers(list(range(len(self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())))))
+        # TODO  move this to __init__ if this function is removed
         self.nn.net.initialize_spatial_layers(cfg.DATA_SHAPE(), cfg.BATCH_SIZE, self.ps)
         _, test_acc, correct = self.nn.test(self.test_gen)
         print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')

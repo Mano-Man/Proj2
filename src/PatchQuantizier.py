@@ -50,7 +50,7 @@ class PatchQuantizier():
                     nn.net.strict_mask_update(update_ids=[l], masks=[torch.from_numpy(mask)])
                     _, test_acc, _ = nn.test(test_gen)
                     ops_saved, ops_total = nn.net.num_ops()
-                    nn.net.reset_spatial()
+                    nn.net.reset_ops()
                     self.output_rec.addRecord(ops_saved, ops_total, test_acc, l, c, 0, p_idx)
         
                     save_counter += 1

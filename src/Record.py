@@ -311,15 +311,14 @@ class FinalResultRc():
         self.dataset_name = dataset_name
         self.init_acc = init_acc
         
-    def print_rec(self):
+    def __str__(self):
         string =  "================================================================\n"
-        string += " RESULT FOR:    {:>15} {:>10}\n".format(self.network, self.dataset_name)
-        string += "                {:>15}\n".format(gran_dict[self.mode])
+        string += " RESULT FOR:    {:>15} {:>10} {:>20}\n".format(self.network, self.dataset_name, gran_dict[self.mode])
         string += "                {:>15} {}\n".format("TEST SET SIZE:", cfg.TEST_SET_SIZE)
         string += "                {:>15} {}\n".format("INITIAL ACC:", self.init_acc)
-        string += "{:>15} {}\n".format("PATCH SIZE:", self.patch_size)
-        string += "{:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range[1])
-        string += "{:>15} {}\n".format("MAX ACC LOSS:", self.max_acc_loss)
+        string += "                {:>15} {}\n".format("PATCH SIZE:", self.patch_size)
+        string += "                {:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range[1])
+        string += "                {:>15} {}\n".format("MAX ACC LOSS:", self.max_acc_loss)
         string += "----------------------------------------------------------------\n"
         string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}%\n"
         string += f"           with accuracy of: {self.final_acc}%\n"

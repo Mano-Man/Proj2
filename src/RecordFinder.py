@@ -24,12 +24,13 @@ class RecordType(Enum):
 # ----------------------------------------------------------------------------------------------------------------------
 
 class RecordFinder():
-    def __init__(self,net_name, patch_size, ones_range, gran_thresh, max_acc_loss):
+    def __init__(self, net_name, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc):
         self.net_name = net_name
         self.ps = patch_size
         self.ones_range = ones_range
         self.gran_thresh = gran_thresh
         self.max_acc_loss = max_acc_loss
+        self.init_acc = init_acc
 
     def find_rec_filename(self, mode, record_type):
         if record_type==RecordType.FIRST_LVL_REC:
@@ -63,7 +64,7 @@ class RecordFinder():
             return rec_filename[-1]
     
     def _first_lvl_regex(self, mode):
-        filename =  (f'{cfg.NET.__name__}_{cfg.DATA_NAME}_acc*_{gran_dict[mode]}'
+        filename =  (f'{cfg.NET.__name__}_{cfg.DATA_NAME}_acc{self.init_acc}_{gran_dict[mode]}'
                      f'_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}'
                      f'_mg{round(self.gran_thresh,0)}_*pkl')
         return filename

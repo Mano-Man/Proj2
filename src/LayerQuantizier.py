@@ -68,7 +68,7 @@ class LayerQuantizier():
         nn.net.strict_mask_update(update_ids=list(range(len(self.layers_layout))), masks=self.sp_list)
         _, test_acc, _ = nn.test(test_gen)
         ops_saved, ops_total = nn.net.num_ops()
-        nn.net.reset_spatial()
+        nn.net.reset_ops()
         self.save_state(test_acc,ops_saved, ops_total)
         
         counter = 1
@@ -79,7 +79,7 @@ class LayerQuantizier():
             nn.net.lazy_mask_update(update_ids=[l_to_inc], masks=[self.sp_list[l_to_inc]])
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
-            nn.net.reset_spatial()
+            nn.net.reset_ops()
             self.save_state(test_acc,ops_saved, ops_total)
             l_to_inc = self._get_next_opt()
             counter += 1

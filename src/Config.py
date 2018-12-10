@@ -15,7 +15,7 @@ DATA_SETS =	{
 }
 
 BATCH_SIZE = 128
-TEST_SET_SIZE = BATCH_SIZE * 8 # This is 1024 - Max for CIFAR10 is 10000  - Better to align it to Batch Size for speed!
+TEST_SET_SIZE = 1000 #BATCH_SIZE * 8 # This is 1024 - Max for CIFAR10 is 10000  - Better to align it to Batch Size for speed!
  
 NET = NETS[1]  # The chosen network
 DATA_NAME = "CIFAR10" # The chosen data
