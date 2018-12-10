@@ -117,6 +117,10 @@ class SpatialNet(PytorchNet):
         for sp in self.spatial_layers:
             sp.reset_ops()
             sp.set_enable(False)
+            
+    def reset_ops(self):
+        for sp in self.spatial_layers:
+            sp.reset_ops()
 
     def num_ops(self):
         ops_saved = 0
