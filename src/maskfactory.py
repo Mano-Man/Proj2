@@ -115,5 +115,5 @@ def gen_masks_with_resume(patch_size,patterns, mode, gran_thresh, layer_layout, 
                             resume_params[3] = 0
                             mask = np.ones((C, new_patch_n*new_patch_size,new_patch_m*new_patch_size) , dtype=mask_type)
                             mask = change_one_patch3d(mask, ii, jj, new_patch_size, p, channel)            
-                            yield layer, channel, ii*patch_n+jj, p_idx, mask[:,0:(patch_n*patch_size),0:(patch_m*patch_size)]
+                            yield layer, channel, ii*new_patch_n+jj, p_idx, mask[:,0:(patch_n*patch_size),0:(patch_m*patch_size)]
 

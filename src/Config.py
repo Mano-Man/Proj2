@@ -1,7 +1,7 @@
 # Models: (There are many more)
 from models.resnet import ResNet18, ResNet18Spatial, ResNet34Spatial
 from util.datasets import CIFAR10_shape, CIFAR10_train, CIFAR10_test, ImageNet_shape, ImageNet_train, ImageNet_test
-import sys
+import os
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                 Global Config
@@ -15,20 +15,21 @@ DATA_SETS =	{
 }
 
 BATCH_SIZE = 128
-
+TEST_SET_SIZE = BATCH_SIZE * 8 # This is 1024 - Max for CIFAR10 is 10000  - Better to align it to Batch Size for speed!
+ 
 NET = NETS[1]  # The chosen network
 DATA_NAME = "CIFAR10" # The chosen data
 
 # Complexity Config
-SAVE_INTERVAL = 300
+SAVE_INTERVAL = 100
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                   Data Import
 # ----------------------------------------------------------------------------------------------------------------------
-if 'google.colab' not in sys.modules:
-    CHECKPOINT_DIR = './data/checkpoint/'
-    RESULTS_DIR = './data/results/'
-    DO_DOWNLOAD = False
-else:
+
+CHECKPOINT_DIR = './data/checkpoint/'
+RESULTS_DIR = './data/results/'
+DO_DOWNLOAD = False
+if not os.path.isdir(CHECKPOINT_DIR):
     CHECKPOINT_DIR = '/content/drive/My Drive/Colab Notebooks/data/checkpoint/'
     RESULTS_DIR = '/content/drive/My Drive/Colab Notebooks/data/results/'
     DO_DOWNLOAD = True

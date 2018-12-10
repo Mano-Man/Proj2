@@ -25,10 +25,10 @@ class LayerQuantResumeRec():
 
 
 class LayerQuantizier():
-    def __init__(self, rec, min_acc, patch_size, max_acc_loss, ones_range, resume_param_path=None, default_in_pattern=None):
+    def __init__(self, rec, init_acc, max_acc_loss, patch_size, ones_range, resume_param_path=None, default_in_pattern=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
-        self.min_acc = min_acc
+        self.min_acc = init_acc - max_acc_loss
         self.mode = rec.mode
         self.layers_layout = rec.layers_layout
         self.max_acc_loss = max_acc_loss
@@ -47,7 +47,7 @@ class LayerQuantizier():
         else:
             self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0].dtype)
             
-        self.resume_param_filename = 'LayerQ_ma'+ str(min_acc) + '_' + rec.filename
+        self.resume_param_filename = 'LayerQ_ma'+ str(max_acc_loss) + '_' + rec.filename
         
         if resume_param_path is None:
             input_length = [len(self.input[layer]) for layer in range(len(self.input))]
@@ -68,7 +68,7 @@ class LayerQuantizier():
         nn.net.strict_mask_update(update_ids=list(range(len(self.layers_layout))), masks=self.sp_list)
         _, test_acc, _ = nn.test(test_gen)
         ops_saved, ops_total = nn.net.num_ops()
-        nn.net.reset_ops()
+        nn.net.reset_spatial()
         self.save_state(test_acc,ops_saved, ops_total)
         
         counter = 1
@@ -79,7 +79,7 @@ class LayerQuantizier():
             nn.net.lazy_mask_update(update_ids=[l_to_inc], masks=[self.sp_list[l_to_inc]])
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
-            nn.net.reset_ops()
+            nn.net.reset_spatial()
             self.save_state(test_acc,ops_saved, ops_total)
             l_to_inc = self._get_next_opt()
             counter += 1
@@ -90,7 +90,7 @@ class LayerQuantizier():
         return self.resume_rec.is_final==[-2]*len(self.resume_rec.is_final)                
     
     def save_state(self, test_acc, ops_saved, ops_total):
-        if test_acc >  self.min_acc and ops_saved > self.resume_rec.curr_saved_ops:
+        if test_acc >=  self.min_acc and ops_saved > self.resume_rec.curr_saved_ops:
             self.resume_rec.curr_best_acc = test_acc
             self.resume_rec.curr_saved_ops = ops_saved
             self.resume_rec.curr_tot_ops = ops_total
@@ -109,9 +109,12 @@ class LayerQuantizier():
             self.sp_list[l_idx] = torch.from_numpy(self.input_patterns[l_idx][opt[0]])
     
     def _save_final_rec(self):
-        f_rec = FinalResultRc(self.resume_rec.curr_best_acc, self.resume_rec.curr_saved_ops, 
+        if self.resume_rec.curr_tot_ops == 0:
+            print(f'==> No suitable Option was found for min accuracy of {self.min_acc}')
+            return
+        f_rec = FinalResultRc(self.min_acc + self.max_acc_loss, self.resume_rec.curr_best_acc, self.resume_rec.curr_saved_ops, 
                               self.resume_rec.curr_tot_ops, self.mode, self.resume_rec.curr_best_mask, 
-                              self.patch_size, self.max_acc_loss, self.ones_range, cfg.NET.__name__)
+                              self.patch_size, self.max_acc_loss, self.ones_range, cfg.NET.__name__, cfg.DATA_NAME)
         save_to_file(f_rec,True,cfg.RESULTS_DIR)
         #print('==> finished LayerQuantizier simulation!')
         print('==> result saved to ' + f_rec.filename)
@@ -154,4 +157,3 @@ class LayerQuantizier():
             self.curr_acc_th = acc
         return True
     
-

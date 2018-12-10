@@ -10,6 +10,8 @@ import time
 import os
 import csv
 
+import Config as cfg
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                              Granularity Modes Definition
 # ----------------------------------------------------------------------------------------------------------------------
@@ -191,11 +193,16 @@ class Record():
                 self.no_of_patches = [1] * self.no_of_layers
             self.no_of_patterns = [self.all_patterns.shape[2]]*self.no_of_layers
             self._create_results()
+			
+            self.filename = (f'{cfg.NET.__name__}_{cfg.DATA_NAME}_acc{initial_acc}'
+                             f'_{gran_dict[self.mode]}_ps{argv[0]}_ones{argv[1][0]}x{argv[1][1]}'
+                             f'_mg{round(gran_thresh,0)}_{int(time.time())}')
         else:
             self.all_patterns = argv[0]
             self.no_of_layers,self.no_of_channels, self.no_of_patches, self.no_of_patterns = argv[1]
-
-        self.filename = gran_dict[self.mode]+ '_acc' + str(initial_acc) + '_mg' + str(round(gran_thresh,0)) + '_' + str(int(time.time()))
+            self.filename = ''
+			#self.patch_sizes
+        
 
     def _create_results(self):
         self.results = []
@@ -265,7 +272,7 @@ class Record():
                 for j in range(self.no_of_patches[l]):
                     patch = []
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
-                        if res_tuple[2] > min_acc:
+                        if res_tuple[2] >= min_acc:
                             #patch.append((p_idx,res_tuple[0],res_tuple[2]))
                             patch.append((p_idx,res_tuple[0]/res_tuple[1],res_tuple[2]))
                     patch.append((-1,-1,-1))
@@ -290,7 +297,7 @@ class Record():
 #                                               Final Result Record Class
 # ----------------------------------------------------------------------------------------------------------------------    
 class FinalResultRc():
-    def __init__(self, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name):
+    def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name, dataset_name):
         self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
@@ -301,13 +308,17 @@ class FinalResultRc():
         self.patch_size = ps
         self.ones_range = ones_range
         self.network = net_name
+        self.dataset_name = dataset_name
+        self.init_acc = init_acc
         
     def print_rec(self):
         string =  "================================================================\n"
-        string += " RESULT FOR:    {:>15} {:>10}\n".format(self.network, "CIFAR10")
+        string += " RESULT FOR:    {:>15} {:>10}\n".format(self.network, self.dataset_name)
         string += "                {:>15}\n".format(gran_dict[self.mode])
+        string += "                {:>15} {}\n".format("TEST SET SIZE:", cfg.TEST_SET_SIZE)
+        string += "                {:>15} {}\n".format("INITIAL ACC:", self.init_acc)
         string += "{:>15} {}\n".format("PATCH SIZE:", self.patch_size)
-        string += "{:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range(1))
+        string += "{:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range[1])
         string += "{:>15} {}\n".format("MAX ACC LOSS:", self.max_acc_loss)
         string += "----------------------------------------------------------------\n"
         string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}%\n"
@@ -316,18 +327,22 @@ class FinalResultRc():
         return string
         
 class BaselineResultRc():
-    def __init__(self, baseline_acc, ops_saved, tot_ops, ps, net_name):
+    def __init__(self, init_acc, baseline_acc, ops_saved, tot_ops, ps, net_name, dataset_name):
         self.filename = f'BS_{net_name}_ps{ps}_os{round((ops_saved/tot_ops)*100, 3)}_acc{baseline_acc}'
         self.baseline_acc = baseline_acc
         self.ops_saved = ops_saved
         self.total_ops = tot_ops
         self.patch_size = ps
         self.network = net_name
+        self.dataset_name = dataset_name
+        self.init_acc = init_acc
         
     def __str__(self):
         string =  "================================================================\n"
-        string += " BASELINE FOR:  {:>15} {:>10}\n".format(self.network, "CIFAR10")
-        string += "{:>15} {}\n".format("PATCH SIZE:", self.patch_size)
+        string += " BASELINE FOR:  {:>15} {:>10}\n".format(self.network, self.dataset_name)
+        string += "{:>20}: {}\n".format("PATCH SIZE", self.patch_size)
+        string += "{:>20}: {}\n".format("TEST SET SIZE", cfg.TEST_SET_SIZE)
+        string += "{:>20}: {}\n".format("INITIAL ACC", self.init_acc)
         string += "----------------------------------------------------------------\n"
         string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}% \n"
         string += f"           with accuracy of: {self.baseline_acc}% \n"

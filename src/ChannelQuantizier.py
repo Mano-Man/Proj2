@@ -15,10 +15,10 @@ import maskfactory as mf
 
 
 class ChannelQuantizier():
-    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None, out_rec=None):
+    def __init__(self, rec, init_acc, max_acc_loss, patch_size, out_rec=None,  default_in_pattern=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
-        self.input = rec.gen_pattern_lists(min_acc)
+        self.input = rec.gen_pattern_lists(init_acc - max_acc_loss)
 
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
@@ -30,7 +30,7 @@ class ChannelQuantizier():
 
         if out_rec is None:
             self._generate_patterns(rec.mode, rec.layers_layout)
-            self.output_rec.filename = 'ChannelQ_ma' + str(min_acc) + '_' + rec.filename
+            self.output_rec.filename = 'ChannelQ_ma' + str(max_acc_loss) + '_' + rec.filename
         else:
             self.output_rec = out_rec
 
@@ -45,7 +45,7 @@ class ChannelQuantizier():
                                           masks=[torch.from_numpy(self.output_rec.all_patterns[layer][p_idx])])
                 _, test_acc, _ = nn.test(test_gen)
                 ops_saved, ops_total = nn.net.num_ops()
-                nn.net.reset_ops()
+                nn.net.reset_spatial()
                 self.output_rec.addRecord(ops_saved, ops_total, test_acc, layer, 0, 0, p_idx)
 
                 save_counter += 1

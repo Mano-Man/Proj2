@@ -14,11 +14,11 @@ import torch
 from itertools import zip_longest
 
 class PatchQuantizier():
-    def __init__(self, rec, min_acc, patch_size, default_in_pattern=None, out_rec=None):
+    def __init__(self, rec, init_acc, max_acc_loss, patch_size, out_rec=None, default_in_pattern=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.actual_patch_sizes = rec.patch_sizes
-        self.input = rec.gen_pattern_lists(min_acc)
+        self.input = rec.gen_pattern_lists(init_acc - max_acc_loss)
         
         if default_in_pattern is None:
             self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
@@ -27,7 +27,7 @@ class PatchQuantizier():
             
         if out_rec is None:
             self._generate_patterns(rec.mode,rec.layers_layout)
-            self.output_rec.filename = 'PatchQ_ma'+ str(min_acc) + '_' + rec.filename
+            self.output_rec.filename = 'PatchQ_ma'+ str(max_acc_loss) + '_' + rec.filename
         else:
             self.output_rec = out_rec
         
@@ -50,7 +50,7 @@ class PatchQuantizier():
                     nn.net.strict_mask_update(update_ids=[l], masks=[torch.from_numpy(mask)])
                     _, test_acc, _ = nn.test(test_gen)
                     ops_saved, ops_total = nn.net.num_ops()
-                    nn.net.reset_ops()
+                    nn.net.reset_spatial()
                     self.output_rec.addRecord(ops_saved, ops_total, test_acc, l, c, 0, p_idx)
         
                     save_counter += 1
