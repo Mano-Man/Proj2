@@ -59,16 +59,13 @@ class RecordFinder():
     
     def _first_lvl_regex(self, mode):
         gran_thresh = '*'
-        if mode==Mode.MAX_GRANULARITY:
+        if mode==Mode.MAX_GRANULARITY and type(self.gran_thresh) != str:
             gran_thresh = round(self.gran_thresh,0)
         filename =  (f'{self.net_name}_{self.dataset_name}_acc{self.init_acc}_{gran_dict[mode]}' +
                      f'_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}' +
                      f'_mg{gran_thresh}_*pkl')
         return filename
-    
-    def _get_init_acc(self, fn):
-        return float(re.findall(r'\d+\.\d+', fn)[-1])
-    
+
     def _cQ_regex(self, mode):
         regex = f'ChannelQ_ma{self.max_acc_loss}_'
         if mode == Mode.UNIFORM_PATCH:

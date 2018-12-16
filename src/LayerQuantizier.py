@@ -90,7 +90,7 @@ class LayerQuantizier():
             self.resume_rec.curr_best_acc = test_acc
             self.resume_rec.curr_saved_ops = ops_saved
             self.resume_rec.curr_tot_ops = ops_total
-            self.resume_rec.curr_best_mask = self.sp_list
+            self.resume_rec.curr_best_mask = [self.sp_list[l].clone() for l in range(len(self.sp_list))]
         save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
         
     def _update_layer(self, l_idx, p_idx):
