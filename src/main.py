@@ -48,11 +48,13 @@ def eval_baseline_and_runtimes(ps, ones_range, gran_th):
     optim = Optimizer(ps, ones_range, gran_th, 0)
     optim.base_line_result()
     optim.print_runtime_eval()
+    return optim.init_acc
     
 def main():
+    init_acc = eval_baseline_and_runtimes(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH)
     run_all_acc_loss_possibilities(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH)
     plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, PATCH_SIZE, RANGE_OF_ONES,
-                                   GRANULARITY_TH, 93.5)
+                                   GRANULARITY_TH, init_acc)
     
 def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_thresh, init_acc, mode=None):
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, '*', init_acc)
