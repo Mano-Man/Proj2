@@ -5,13 +5,16 @@ Created on Wed Nov 28 21:22:47 2018
 @author: Inna
 """
 
-from Record import Mode, Record, save_to_file
-import Config as cfg
-import maskfactory as mf
-from tqdm import tqdm
 import numpy as np
 import torch
+import math
+from tqdm import tqdm
 from itertools import zip_longest
+
+from Record import Mode, Record, RecordType, save_to_file
+import Config as cfg
+import maskfactory as mf
+
 
 class PatchQuantizier():
     def __init__(self, rec, init_acc, max_acc_loss, patch_size, out_rec=None, default_in_pattern=None):
@@ -26,20 +29,20 @@ class PatchQuantizier():
             self.default_in_pattern = default_in_pattern  
             
         if out_rec is None:
-            self._generate_patterns(rec.mode,rec.layers_layout)
-            self.output_rec.filename = 'PatchQ_ma'+ str(max_acc_loss) + '_' + rec.filename
+            self._generate_patterns(rec.mode, rec.layers_layout, rec.gran_thresh, rec.filename, max_acc_loss)
         else:
             self.output_rec = out_rec
         
             
     def simulate(self, nn, test_gen):       
         st_point = self.output_rec.find_resume_point()
+        print('==> Starting PatchQuantizier simulation.')
 
         save_counter = 0
         for l in tqdm(range(st_point[0],len(self.input))):
-            for c in tqdm(range(st_point[1],len(self.output_rec.all_patterns[l]))):
+            for c in range(st_point[1],len(self.output_rec.all_patterns[l])):
                 st_point[1]=0
-                for p_idx in tqdm(range(st_point[3], len(self.output_rec.all_patterns[l][c]))):
+                for p_idx in range(st_point[3], len(self.output_rec.all_patterns[l][c])):
                     st_point[3] = 0
                     
                     if self.output_rec.mode == Mode.UNIFORM_FILTERS:
@@ -69,14 +72,18 @@ class PatchQuantizier():
     def save_state(self):
         save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
         
-    def _generate_patterns(self, mode, layers_layout):                
-        self.output_rec = Record(layers_layout,0,False, mode, 0, None , \
-                                    (len(self.input),[1]*len(self.input),[1]*len(self.input),None))
-        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(layers_layout)
-        self.output_rec.no_of_channels = [len(c) for c in self.output_rec.all_patterns]
-        self.output_rec._create_results()
-       
-#    
+    def _generate_patterns(self, mode, layers_layout, gran_thresh, rec_in_filename, max_acc_loss): 
+        #TODO - fix Record init             
+        self.output_rec = Record(layers_layout, gran_thresh, False, mode, None)
+        self.output_rec.set_results_dimensions(no_of_layers=len(self.input), no_of_patches=[1]*len(self.input))
+        
+        no_of_patterns_gen, all_patterns = self._gen_patterns_zip_longest(layers_layout)
+        self.output_rec.set_all_patterns(all_patterns, RecordType.pQ_REC)
+        self.output_rec.set_results_dimensions(no_of_patterns=no_of_patterns_gen, 
+                                               no_of_channels=[len(c) for c in all_patterns])
+        
+        self.output_rec.set_filename('PatchQ_ma'+ str(max_acc_loss) + '_' + rec_in_filename)
+   
     def _gen_patterns_zip_longest(self, layers_layout):
         all_patterns = []
         no_of_patterns = [None]*len(self.input)
@@ -86,15 +93,21 @@ class PatchQuantizier():
             for c in range(len(self.input[l])):
                 channels = []
                 for channel_opt in zip_longest(*self.input[l][c], fillvalue=(-1,-1,-1)):
-                    channel = np.ones((layers_layout[l][1], layers_layout[l][2]), dtype=self.input_patterns.dtype)
+                    #channel = np.ones((layers_layout[l][1], layers_layout[l][2]), dtype=self.input_patterns.dtype)
+                    new_patch_n = math.ceil(layers_layout[l][1]/self.actual_patch_sizes[l])
+                    new_patch_m = math.ceil(layers_layout[l][2]/self.actual_patch_sizes[l])
+                    channel = np.ones((new_patch_n*self.actual_patch_sizes[l],new_patch_m*self.actual_patch_sizes[l]) , dtype=self.input_patterns.dtype)
                     for patch_idx, opt in enumerate(channel_opt):
-                        patch_n, patch_m = mf.get_patch_indexes(patch_idx, layers_layout[l][1], self.actual_patch_sizes[l])
+                        ii, jj = mf.get_patch_indexes(patch_idx, layers_layout[l][1], self.actual_patch_sizes[l])
                         p = self.input_patterns[:,:,opt[0]]
                         if (self.actual_patch_sizes[l] != self.patch_size):
                             p = mf.tile_opt((self.actual_patch_sizes[l],self.actual_patch_sizes[l]), p, False)
-                        channel = mf.change_one_patch2d(channel, patch_n, patch_m, self.actual_patch_sizes[l], p)
+                        channel = mf.change_one_patch2d(channel, ii, jj, self.actual_patch_sizes[l], p)
                     no_of_patterns[l][c] += 1
-                    channels.append(channel)
+                    if (self.actual_patch_sizes[l] != self.patch_size):
+                        new_patch_n = math.ceil(layers_layout[l][1]/self.patch_size)
+                        new_patch_m = math.ceil(layers_layout[l][2]/self.patch_size)
+                    channels.append(channel[0:(new_patch_n*self.patch_size),0:(new_patch_m*self.patch_size)])
                 layers.append(channels)
             all_patterns.append(layers)
         patterns_max_count = [max(no_of_patterns[l]) for l in range(len(self.input))]

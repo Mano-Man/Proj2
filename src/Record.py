@@ -27,6 +27,19 @@ gran_dict = {Mode.MAX_GRANULARITY:"max_granularity",
              Mode.UNIFORM_PATCH:"uniform_patch", 
              Mode.UNIFORM_LAYER:"uniform_layer"}
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                           Record Types Definitions
+# ----------------------------------------------------------------------------------------------------------------------
+
+class RecordType(Enum):
+    FIRST_LVL_REC = 0
+    pQ_REC = 1
+    cQ_REC = 2
+    lQ_RESUME = 3
+    FINAL_RESULT_REC = 4
+    BASELINE_REC = 5
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    Util Functions
 # ----------------------------------------------------------------------------------------------------------------------
@@ -135,15 +148,9 @@ class Record():
                 argv[0] should contain patch_size
                 argv[1] should contain ones_range, see details in all_patches_array function doc
             if False,
-                argv[0] should contain all the patterns relevant for this Record. 
-                        argv[0] is stored at Record.all_patterns
-                argv[1] should contain a list of the format:
-                    [no_of_layers,no_of_channels,no_of_patches,no_of_patterns]
-                    where no_of_layers is an integer 
-                    no_of_channels, no_of_patches, no_of_patterns are lists of 
-                    no_of_layers length
+                no additional arguments needed
                 IMPORTANT! when gen_patches==False, after init yot HAVE to 
-                call _create_results()
+                call set_results_dimensions(), set_all_patterns(), set_filename() 
         mode -          granularity mode
         initial_acc -   initial accuracy of the model 
     
@@ -153,13 +160,12 @@ class Record():
                                                                  # (64,32,32) are the dimensions of the required mask in the 1st layer
             rec = Record(layers_layout, GRAN_THRESH, True, max_granularity, 93.83, PS, ONES_RANGE)
         with gen_patches == False:
-            patterns = ... # Data structure containing the 
-            rec = Record(layers_layout, cfg.GRAN_THRESH, False, max_granularity, 93.83, patterns, \
-                         [3, [64,128,256], [256,64,16], None])
-            rec.no_of_patterns = [10,10,10]
-            rec._create_results()   # IMPORTANT! when gen_patches==False, after init and after the 
-                                    # dimenstions (no_of_layers, no_of_channels, no_of_patches, no_of_patterns)
-                                    # are set yot HAVE to call _create_results()
+            patterns = ... # Data structure containing the relevant patterns
+            rec = Record(layers_layout, cfg.GRAN_THRESH, False, max_granularity, 93.83)
+            rec.set_filename('desired_filename')
+            rec.set_all_patterns(patterns, rec_type)
+            rec.set_results_dimensions(no_of_layers=3, no_of_channels=[64,128,256], no_of_patches=[256,64,16], 
+                               no_of_patterns=[10,10,10])
                                     
     Simulation results are stored in Record.results:
         Record.results[layer][channel][patch][pattern] = (ops_saved, total_ops, accuracy)
@@ -169,6 +175,7 @@ class Record():
         self.mode = mode
         self.gran_thresh = gran_thresh
         self.layers_layout = layers_layout
+        self.is_initialized = False
         
         if gen_patches:
             self.no_of_layers = len(layers_layout)
@@ -192,18 +199,78 @@ class Record():
                 self.no_of_channels = [1] * self.no_of_layers
                 self.no_of_patches = [1] * self.no_of_layers
             self.no_of_patterns = [self.all_patterns.shape[2]]*self.no_of_layers
-            self._create_results()
+            
+            self.rec_type = RecordType.FIRST_LVL_REC
 			
             self.filename = (f'{cfg.NET.__name__}_{cfg.DATA_NAME}_acc{initial_acc}'
                              f'_{gran_dict[self.mode]}_ps{argv[0]}_ones{argv[1][0]}x{argv[1][1]}'
                              f'_mg{round(gran_thresh,0)}_{int(time.time())}')
+            self._create_results()
         else:
-            self.all_patterns = argv[0]
-            self.no_of_layers,self.no_of_channels, self.no_of_patches, self.no_of_patterns = argv[1]
-            self.filename = ''
-			#self.patch_sizes
+            self.all_patterns = None 
+            self.no_of_layers = None
+            self.no_of_channels = None
+            self.no_of_patches = None
+            self.no_of_patterns = None
+            self.filename = None
+            self.rec_type = None
+            self.patch_sizes = None
+    
+    def set_results_dimensions(self, no_of_layers=None, no_of_channels=None, no_of_patches=None, 
+                               no_of_patterns=None, patch_sizes=None): 
+        if no_of_layers is not None:
+            self.no_of_layers = no_of_layers
+        if no_of_channels is not None:
+            self.no_of_channels = no_of_channels
+            if type(no_of_channels) is int:
+                self.no_of_channels = [no_of_channels]*self.no_of_layers
+        if no_of_patches is not None:
+            self.no_of_patches = no_of_patches
+            if type(no_of_patches) is int:
+                self.no_of_patches = [no_of_patches]*self.no_of_layers
+        if no_of_patterns is not None:
+            self.no_of_patterns = no_of_patterns
+            if type(no_of_patterns) is int:
+                self.no_of_patterns = [no_of_patterns]*self.no_of_layers
+        if patch_sizes is not None:
+            self.patch_sizes = patch_sizes
+            if type(patch_sizes) is int:
+                self.patch_sizes = [patch_sizes]*self.no_of_layers
+        if self.is_ready_to_initialize():
+            self._create_results()
+    
+    def set_all_patterns(self, patterns, record_type):
+        self.all_patterns = patterns
+        self.rec_type = record_type
         
-
+    def set_filename(self, filename):
+        self.filename = filename
+                
+    def is_initialized(self):
+        return self.is_initialized
+    
+    def get_pattern(self, layer, channel, pattern_idx):
+        if self.rec_type == RecordType.FIRST_LVL_REC:
+            return self.all_patterns[:,:,pattern_idx]
+        elif self.rec_type == RecordType.pQ_REC:
+            if self.mode == Mode.UNIFORM_FILTERS:
+                channel = 0
+            return self.all_patterns[layer][channel][pattern_idx]
+        elif self.rec_type == RecordType.cQ_REC:
+            return self.all_patterns[layer][pattern_idx]
+        
+    def is_ready_to_initialize(self):
+        if self.no_of_layers is None:
+            return False
+        elif self.no_of_channels is None:
+            return False
+        elif self.no_of_patches is None:
+            return False
+        elif self.no_of_patterns is None:
+            return False
+        else:
+            return True
+        
     def _create_results(self):
         self.results = []
         self.size = 0
@@ -219,8 +286,10 @@ class Record():
                     channel.append(patch)
                 layer.append(channel)
             self.results.append(layer)
+        self.is_initialized = True
     
     def addRecord(self, op, tot_op, acc, layer, channel=0, patch_idx=0, pattern_idx=0):
+        assert self.is_initialized, 'Error: Record is not initialized!'
         self.results[layer][channel][patch_idx][pattern_idx] = (op, tot_op, acc)
 
     def find_resume_point(self):
@@ -228,6 +297,7 @@ class Record():
         returns list of format [layer,channel,patch,pattern] with the first 
         indices for which simulation results were nor recorded
         '''
+        assert self.is_initialized, 'Error: Record is not initialized!'
         for layer in range(self.no_of_layers):
             for channel in range(self.no_of_channels[layer]):
                 for patch_idx in range(self.no_of_patches[layer]):
@@ -235,6 +305,7 @@ class Record():
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return [layer, channel, patch_idx, pattern_idx]
     def fill_empty(self):
+        assert self.is_initialized, 'Error: Record is not initialized!'
         for layer in range(self.no_of_layers):
             for channel in range(self.no_of_channels[layer]):
                 for patch_idx in range(self.no_of_patches[layer]):
@@ -264,6 +335,7 @@ class Record():
         '''
         
         '''
+        assert self.is_full(), "Error! Not all results recorded!"
         slresults = []
         for l in range(self.no_of_layers):
             layer = []
@@ -273,8 +345,8 @@ class Record():
                     patch = []
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
                         if res_tuple[2] >= min_acc:
-                            #patch.append((p_idx,res_tuple[0],res_tuple[2]))
-                            patch.append((p_idx,res_tuple[0]/res_tuple[1],res_tuple[2]))
+                            patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                            #patch.append((p_idx,res_tuple[0]/res_tuple[1],res_tuple[2]))
                     patch.append((-1,-1,-1))
                     channel.append(patch)
                 layer.append(channel)
@@ -298,7 +370,7 @@ class Record():
 # ----------------------------------------------------------------------------------------------------------------------    
 class FinalResultRc():
     def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name, dataset_name):
-        self.filename = f'FR_{net_name}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
+        self.filename = f'FR_{net_name}_{dataset_name}_acc{init_acc}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
         self.ops_saved = ops_saved
@@ -317,7 +389,7 @@ class FinalResultRc():
         string += "                {:>15} {}\n".format("TEST SET SIZE:", cfg.TEST_SET_SIZE)
         string += "                {:>15} {}\n".format("INITIAL ACC:", self.init_acc)
         string += "                {:>15} {}\n".format("PATCH SIZE:", self.patch_size)
-        string += "                {:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range[1])
+        string += "                {:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range[1]-1)
         string += "                {:>15} {}\n".format("MAX ACC LOSS:", self.max_acc_loss)
         string += "----------------------------------------------------------------\n"
         string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}%\n"
@@ -327,7 +399,7 @@ class FinalResultRc():
         
 class BaselineResultRc():
     def __init__(self, init_acc, baseline_acc, ops_saved, tot_ops, ps, net_name, dataset_name):
-        self.filename = f'BS_{net_name}_ps{ps}_os{round((ops_saved/tot_ops)*100, 3)}_acc{baseline_acc}'
+        self.filename = f'BS_{net_name}_{dataset_name}_acc{init_acc}_ps{ps}_os{round((ops_saved/tot_ops)*100, 3)}_bacc{baseline_acc}'
         self.baseline_acc = baseline_acc
         self.ops_saved = ops_saved
         self.total_ops = tot_ops

@@ -55,12 +55,8 @@ class LayerQuantizier():
         else:
             self.resume_rec = load_from_file(resume_param_path, path='')
         
-        
-
     def simulate(self, nn, test_gen):
-        
         print('==> starting LayerQuantizier simulation.')
-        
         self.sp_list = [None]*len(self.input)
         for l_idx, p_idx in enumerate(self.resume_rec.resume_index):
             self._update_layer( l_idx, p_idx)

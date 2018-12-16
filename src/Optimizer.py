@@ -5,14 +5,14 @@ import torch
 import torch.nn
 
 import os
-from tqdm import tqdm
 import random
+from tqdm import tqdm
 import time
 
 #from util.data_import import CIFAR10_Test, CIFAR10_shape
-from RecordFinder import RecordFinder, RecordType
+from RecordFinder import RecordFinder
 from NeuralNet import NeuralNet
-from Record import Mode, Record, BaselineResultRc, load_from_file, save_to_file
+from Record import Mode, Record, RecordType, BaselineResultRc, load_from_file, save_to_file
 from PatchQuantizier import PatchQuantizier
 from ChannelQuantizier import ChannelQuantizier
 from LayerQuantizier import LayerQuantizier
@@ -24,17 +24,17 @@ import Config as cfg
 #
 # ----------------------------------------------------------------------------------------------------------------------
 class Optimizer:
-    def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, calc_init_acc=True, init_acc=None):
+    def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc=None, test_size=cfg.TEST_SET_SIZE):
         self.nn = NeuralNet()
-        self.test_gen = cfg.TEST_GEN(batch_size=cfg.BATCH_SIZE, max_dataset_size=cfg.TEST_SET_SIZE, download=cfg.DO_DOWNLOAD)
+        self.test_gen = cfg.TEST_GEN(batch_size=cfg.BATCH_SIZE, max_dataset_size=test_size, download=cfg.DO_DOWNLOAD)
         self.test_set_size = cfg.TEST_SET_SIZE
-        if calc_init_acc:
+        if init_acc is None:
             _, test_acc, correct = self.nn.test(self.test_gen)
             print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
             self.init_acc = test_acc  # TODO - Fix initialize bug 
         else:
             self.init_acc = init_acc
-        self.record_finder = RecordFinder(cfg.NET.__name__, patch_size, ones_range, gran_thresh, max_acc_loss, self.init_acc)
+        self.record_finder = RecordFinder(cfg.NET.__name__, cfg.DATA_NAME ,patch_size, ones_range, gran_thresh, max_acc_loss, self.init_acc)
         self.ps = patch_size
         self.max_acc_loss = max_acc_loss
         self.gran_thresh = gran_thresh
@@ -75,6 +75,24 @@ class Optimizer:
         if RecordType.lQ_RESUME == rec_type:
             return
         return quantizier.output_rec
+    
+    def run_mode(self, mode=None):
+        if Mode.MAX_GRANULARITY==mode:
+            self.by_max_granularity()
+        elif Mode.UNIFORM_FILTERS==mode:
+            self.by_uniform_filters()
+        elif Mode.UNIFORM_LAYER==mode:
+            self.by_uniform_layers()
+        elif Mode.UNIFORM_PATCH==mode:
+            self.by_uniform_patches()
+        else:
+            self.run_all_modes()
+    
+    def run_all_modes(self):
+        self.by_uniform_layers()
+        self.by_uniform_filters()
+        self.by_uniform_patches()
+        self.by_max_granularity()
 
     def by_uniform_layers(self):
         in_rec = self.gen_first_lvl_results(Mode.UNIFORM_LAYER)

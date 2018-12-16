@@ -4,12 +4,13 @@ Created on Wed Nov 28 21:22:47 2018
 
 @author: Inna
 """
-from tqdm import tqdm
+
 import numpy as np
 import torch
+from tqdm import tqdm
 from itertools import zip_longest
 
-from Record import Mode, Record, save_to_file
+from Record import Mode, RecordType, Record, save_to_file
 import Config as cfg
 import maskfactory as mf
 
@@ -29,17 +30,17 @@ class ChannelQuantizier():
                                               dtype=self.input_patterns.dtype)
 
         if out_rec is None:
-            self._generate_patterns(rec.mode, rec.layers_layout)
-            self.output_rec.filename = 'ChannelQ_ma' + str(max_acc_loss) + '_' + rec.filename
+            self._generate_patterns(rec.mode, rec.layers_layout, rec.gran_thresh, rec.filename, max_acc_loss)
         else:
             self.output_rec = out_rec
 
     def simulate(self, nn, test_gen):
         st_point = self.output_rec.find_resume_point()
+        print('==> starting ChannelQuantizier simulation.')
 
         save_counter = 0
         for layer in tqdm(range(st_point[0], len(self.input))):
-            for p_idx in tqdm(range(st_point[3], len(self.output_rec.all_patterns[layer]))):
+            for p_idx in range(st_point[3], len(self.output_rec.all_patterns[layer])):
                 st_point[3] = 0
                 nn.net.strict_mask_update(update_ids=[layer],
                                           masks=[torch.from_numpy(self.output_rec.all_patterns[layer][p_idx])])
@@ -62,14 +63,19 @@ class ChannelQuantizier():
     def save_state(self):
         save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
 
-    def _generate_patterns(self, mode, layers_layout):
-        self.output_rec = Record(layers_layout, 0, False, mode, 0, None, \
-                                 (len(self.input), [1] * len(self.input), [1] * len(self.input), None))
-        self.output_rec.no_of_patterns, self.output_rec.all_patterns = self._gen_patterns_zip_longest(mode,
-                                                                                                      layers_layout)
-        self.output_rec._create_results()
+    def _generate_patterns(self, mode, layers_layout, gran_thresh, rec_in_filename, max_acc_loss):
+        #TODO - fix Record init   
+        self.output_rec = Record(layers_layout, gran_thresh, False, mode, None)
+        self.output_rec.set_results_dimensions(no_of_layers=len(self.input),
+                                               no_of_channels=[1]*len(self.input),
+                                               no_of_patches=[1]*len(self.input))
+        
+        no_of_patterns_gen, all_patterns = self._gen_patterns_zip_longest(mode, layers_layout)
+        self.output_rec.set_all_patterns(all_patterns, RecordType.cQ_REC)
+        self.output_rec.set_results_dimensions(no_of_patterns=no_of_patterns_gen)
+        
+        self.output_rec.set_filename('ChannelQ_ma'+ str(max_acc_loss) + '_' + rec_in_filename)
 
-    #
     def _gen_patterns_zip_longest(self, mode, layers_layout):
         all_patterns = []
         no_of_patterns = 0

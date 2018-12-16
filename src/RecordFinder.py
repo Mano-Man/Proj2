@@ -4,28 +4,18 @@
 import glob
 import os
 import re
-from enum import Enum
-from Record import Mode, load_from_file, gran_dict
-import Config as cfg
 
-# ----------------------------------------------------------------------------------------------------------------------
-#                                           Record Types Definitions
-# ----------------------------------------------------------------------------------------------------------------------
-class RecordType(Enum):
-    FIRST_LVL_REC = 0
-    pQ_REC = 1
-    cQ_REC = 2
-    lQ_RESUME = 3
-    FINAL_RESULT_REC = 4
-    BASELINE_REC = 5
+from Record import Mode, RecordType, load_from_file, gran_dict
+import Config as cfg
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                     Util Functions for Finding Records
 # ----------------------------------------------------------------------------------------------------------------------
 
 class RecordFinder():
-    def __init__(self, net_name, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc):
+    def __init__(self, net_name, dataset_name, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc):
         self.net_name = net_name
+        self.dataset_name = dataset_name
         self.ps = patch_size
         self.ones_range = ones_range
         self.gran_thresh = gran_thresh
@@ -47,6 +37,10 @@ class RecordFinder():
             return self._find_rec_file_by_time(self._baseline_rec_regex())
         else:
             return None
+        
+    def find_all_FRs(self, mode):
+        regex = self._final_rec_regex(mode)
+        return glob.glob(f'{cfg.RESULTS_DIR}{regex}')
 
     def print_result(self, mode):
         f_rec_fn = self.find_rec_filename(mode,RecordType.FINAL_RESULT_REC)
@@ -64,9 +58,12 @@ class RecordFinder():
             return rec_filename[-1]
     
     def _first_lvl_regex(self, mode):
-        filename =  (f'{cfg.NET.__name__}_{cfg.DATA_NAME}_acc{self.init_acc}_{gran_dict[mode]}'
-                     f'_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}'
-                     f'_mg{round(self.gran_thresh,0)}_*pkl')
+        gran_thresh = '*'
+        if mode==Mode.MAX_GRANULARITY:
+            gran_thresh = round(self.gran_thresh,0)
+        filename =  (f'{self.net_name}_{self.dataset_name}_acc{self.init_acc}_{gran_dict[mode]}' +
+                     f'_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}' +
+                     f'_mg{gran_thresh}_*pkl')
         return filename
     
     def _get_init_acc(self, fn):
@@ -94,9 +91,9 @@ class RecordFinder():
         return (f'PatchQ_ma{self.max_acc_loss}_' + self._first_lvl_regex(mode))
     
     def _final_rec_regex(self, mode):
-        return f'FR_{self.net_name}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[mode]}_ma{self.max_acc_loss}*pkl'
-    
+        return f'FR_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[mode]}_ma{self.max_acc_loss}*pkl'
+      
     def _baseline_rec_regex(self):
-        return f'BS_{self.net_name}_ps{self.ps}_os*_acc*pkl'
+        return f'BS_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_os*_bacc*pkl'
 
       

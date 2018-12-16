@@ -4,21 +4,23 @@
 import torch
 import torch.nn
 
-
+import matplotlib.pyplot as plt
 
 from Optimizer import Optimizer
 from NeuralNet import NeuralNet
 import Config as cfg
+from Record import Mode, gran_dict, RecordType, load_from_file
+from RecordFinder import RecordFinder
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                     Consts
 # ----------------------------------------------------------------------------------------------------------------------
 
-PATCH_SIZE = 3
+PATCH_SIZE = 2
 RANGE_OF_ONES = (1, 3)
 GRANULARITY_TH = 10
 ACC_LOSS = 2
-PATCH_SIZE = 2
+ACC_LOSS_OPTS = [0, 1, 2, 3, 5]
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    
@@ -36,20 +38,59 @@ def debug_main():
     _, test_acc, correct = nn.test(test_gen)
     print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
     nn.net.print_ops_summary()
-
-
-def main():
-    optim = Optimizer(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH, ACC_LOSS)
+            
+def run_all_acc_loss_possibilities(ps, ones_range, gran_th, mode=None):
+    for acc_loss in ACC_LOSS_OPTS:
+        optim = Optimizer(ps, ones_range, gran_th, acc_loss)
+        optim.run_mode(mode)
+        
+def eval_baseline_and_runtimes(ps, ones_range, gran_th):
+    optim = Optimizer(ps, ones_range, gran_th, 0)
     optim.base_line_result()
-    optim.by_uniform_layers()
-    optim.by_uniform_filters()
-    optim.by_uniform_patches()
-    optim.by_max_granularity()
+    optim.print_runtime_eval()
     
-def gen_uniform_layer_acc_loss_results(patch_size, range_ones, gran_th):
-    for acc_loss in [0, 1, 2, 3, 5]:
-        optim = Optimizer(patch_size, range_ones, gran_th, acc_loss)
-        optim.by_uniform_layers()
+def main():
+    run_all_acc_loss_possibilities(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH)
+    plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, PATCH_SIZE, RANGE_OF_ONES,
+                                   GRANULARITY_TH, 93.5)
+    
+def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_thresh, init_acc, mode=None):
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, '*', init_acc)
+    bs_line_fn = rec_finder.find_rec_filename(mode, RecordType.BASELINE_REC)
+    if bs_line_fn is None:
+        optim = Optimizer(ps, ones_range, gran_thresh, 0, init_acc)
+        optim.base_line_result()
+        bs_line_fn = rec_finder.find_rec_filename(mode, RecordType.BASELINE_REC)
+    bs_line_rec = load_from_file(bs_line_fn, '')
+    plt.figure()
+    plt.plot(ACC_LOSS_OPTS, [round(bs_line_rec.ops_saved/bs_line_rec.total_ops, 3)]*len(ACC_LOSS_OPTS),'o--', label='baseline')
+    if mode is None:
+        modes = [m for m in Mode]
+    else:
+        modes = [mode]
+        
+    for mode in modes:
+        fns = rec_finder.find_all_FRs(mode)
+        max_acc_loss = [None]*len(fns)
+        ops_saved = [None]*len(fns)
+        for idx, fn in enumerate(fns):
+            final_rec = load_from_file(fn,'')
+            ops_saved[idx] = round(final_rec.ops_saved/final_rec.total_ops, 3)
+            max_acc_loss[idx] = final_rec.max_acc_loss
+        if len(fns)!= 0:    
+            plt.plot(max_acc_loss, ops_saved,'o--', label=gran_dict[mode])
+    
+    plt.xlabel('max acc loss [%]') 
+    plt.ylabel('operations saved [%]') 
+
+    plt.title(f'Operations Saved vs Maximun Allowed Accuracy Loss \n'
+              f'{net_name}, {dataset_name}, INITIAL ACC:{init_acc} \n'
+              f'PATCH SIZE:{ps}, ONES:{ones_range[0]}-{ones_range[1]-1}, GRANULARITY:{gran_thresh}')
+
+    plt.legend() 
+    #plt.show() 
+    plt.savefig(f'{cfg.RESULTS_DIR}ops_saved_vs_max_acc_loss_{net_name}_{dataset_name}'+
+                f'acc{init_acc}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_mg{gran_thresh}.pdf')
 
 def info_main():
     nn = NeuralNet()
@@ -110,4 +151,4 @@ def training_main():
 
 
 if __name__ == '__main__':
-    gen_uniform_layer_acc_loss_results(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH)
+    main()
