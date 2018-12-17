@@ -5,38 +5,6 @@ from RecordFinder import RecordFinder
 from Optimizer import Optimizer
 from Record import RecordType, Mode, gran_dict, load_from_file
 import Config as cfg
-
-
-def show_channel(layer, channel, dims, image, ps, filename=None):
-    plt.figure()
-    plt.imshow(image)
-    plt.title(f'Layer:{layer}, Channel:{channel}, dims:{dims}')
-    ax = plt.gca()
-    # Minor ticks
-    ax.set_xticks(np.arange(-.5, image.shape[0]-1, ps), minor=True);
-    ax.set_yticks(np.arange(-.5, image.shape[1]-1, ps), minor=True);
-    # Gridlines based on minor ticks
-    ax.grid(which='minor', color='w', linestyle='-', linewidth=1)
-    plt.tick_params(axis='both', which='major', bottom=False, top=False,
-                    left=False, right=False, labelbottom=False, labelleft=False)
-    if filename is None:
-        plt.show()
-    else:
-        plt.savefig(filename)
-    
-def show_layer(layer_idx, dims, layer, filename=None):
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    ax.set_xlabel("Channels")
-    ax.set_ylabel("N")
-    ax.set_zlabel("M")
-    ax.grid(True)
-    ax.voxels(layer, edgecolors='gray')
-    plt.title(f'Layer:{layer_idx}, dims:{dims}')
-    if filename is None:
-        plt.show()
-    else:
-        plt.savefig(filename)
     
 def show_final_mask(net_name, dataset_name, mode, show_all_layers=False, ps='*', ones_range=('*','*'), gran_thresh='*', init_acc='*'):
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, '*', init_acc)
@@ -71,39 +39,39 @@ def show_final_mask(net_name, dataset_name, mode, show_all_layers=False, ps='*',
             show_channel(l_to_plot_idx, rec.layers_layout[l_to_plot_idx][0]-1, rec.layers_layout[l_to_plot_idx], 
                          l_to_plot[rec.layers_layout[l_to_plot_idx][0]-1], rec.patch_size)
     return rec
-
-def plot_ops_saved_vs_ones(net_name, dataset_name, ps, ones_possibilities, gran_thresh, acc_loss, init_acc, mode):
-    ops_saved = [None]*len(ones_possibilities)
-    for idx, ones in enumerate(ones_possibilities):
-        rec_finder = RecordFinder(net_name, dataset_name, ps, (ones,ones+1), gran_thresh, acc_loss, init_acc)
-        fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
-        rec = load_from_file(fn,'')
-        ops_saved[idx] = round(rec.ops_saved/rec.total_ops, 3)
+    
+def plot_ops_saved_vs_ones(net_name, dataset_name, ps, ones_possibilities, gran_thresh, acc_loss, init_acc, mode=None):
+    bs_line_rec = get_baseline_rec(net_name, dataset_name, ps, init_acc)
     plt.figure()
-    plt.plot(ones_possibilities, ops_saved)
+    if bs_line_rec is not None:
+        plt.plot(ones_possibilities, [round(bs_line_rec.ops_saved/bs_line_rec.total_ops, 3)]*len(ones_possibilities),'o--', label='baseline')
+    
+    modes = get_modes(mode)
+    for mode in modes:
+        ops_saved = [None]*len(ones_possibilities)
+        for idx, ones in enumerate(ones_possibilities):
+            rec_finder = RecordFinder(net_name, dataset_name, ps, (ones,ones+1), gran_thresh, acc_loss, init_acc)
+            fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
+            rec = load_from_file(fn,'')
+            ops_saved[idx] = round(rec.ops_saved/rec.total_ops, 3)
+        plt.plot(ones_possibilities, ops_saved,'o--', label=gran_dict[mode])
     plt.xlabel('number of ones') 
     plt.ylabel('operations saved [%]') 
     plt.title(f'Operations Saved vs Number of Ones \n'
               f'{net_name}, {dataset_name}, INITIAL ACC:{init_acc} \n'
               f'PATCH SIZE:{ps}, MAX ACC LOSS:{acc_loss}, GRANULARITY:{gran_thresh}')
+    plt.legend()
     plt.savefig(f'{cfg.RESULTS_DIR}ops_saved_vs_number_of_ones_{net_name}_{dataset_name}'+
                 f'acc{init_acc}_ps{ps}_ma{acc_loss}_mg{gran_thresh}.pdf')
     
 def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss_opts, init_acc, mode=None):
-    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, '*', init_acc)
-    bs_line_fn = rec_finder.find_rec_filename(mode, RecordType.BASELINE_REC)
-    if bs_line_fn is None:
-        optim = Optimizer(ps, ones_range, gran_thresh, 0, init_acc)
-        optim.base_line_result()
-        bs_line_fn = rec_finder.find_rec_filename(mode, RecordType.BASELINE_REC)
-    bs_line_rec = load_from_file(bs_line_fn, '')
+    bs_line_rec = get_baseline_rec(net_name, dataset_name, ps, init_acc)
     plt.figure()
-    plt.plot(acc_loss_opts, [round(bs_line_rec.ops_saved/bs_line_rec.total_ops, 3)]*len(acc_loss_opts),'o--', label='baseline')
-    if mode is None:
-        modes = [m for m in Mode]
-    else:
-        modes = [mode]
-        
+    if bs_line_rec is not None:
+        plt.plot(acc_loss_opts, [round(bs_line_rec.ops_saved/bs_line_rec.total_ops, 3)]*len(acc_loss_opts),'o--', label='baseline')
+
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, '*', init_acc)
+    modes = get_modes(mode)   
     for mode in modes:
         fns = rec_finder.find_all_FRs(mode)
         max_acc_loss = [None]*len(fns)
@@ -126,3 +94,56 @@ def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_
     #plt.show() 
     plt.savefig(f'{cfg.RESULTS_DIR}ops_saved_vs_max_acc_loss_{net_name}_{dataset_name}'+
                 f'acc{init_acc}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_mg{gran_thresh}.pdf')
+
+def show_channel(layer, channel, dims, image, ps, filename=None):
+    plt.figure()
+    plt.imshow(image)
+    plt.title(f'Layer:{layer}, Channel:{channel}, dims:{dims}')
+    ax = plt.gca()
+    # Minor ticks
+    ax.set_xticks(np.arange(-.5, image.shape[0]-1, ps), minor=True);
+    ax.set_yticks(np.arange(-.5, image.shape[1]-1, ps), minor=True);
+    # Gridlines based on minor ticks
+    ax.grid(which='minor', color='w', linestyle='-', linewidth=1)
+    plt.tick_params(axis='both', which='major', bottom=False, top=False,
+                    left=False, right=False, labelbottom=False, labelleft=False)
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+    
+def show_layer(layer_idx, dims, layer, filename=None):
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.set_xlabel("Channels")
+    ax.set_ylabel("N")
+    ax.set_zlabel("M")
+    ax.grid(True)
+    ax.voxels(layer, edgecolors='gray')
+    plt.title(f'Layer:{layer_idx}, dims:{dims}')
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+
+def get_modes(mode):
+    if mode is None:
+        modes = [m for m in Mode]
+    elif type(mode)==list:
+        modes = mode
+    else:
+        modes = [mode]
+    return modes
+
+def get_baseline_rec(net_name, dataset_name, ps, init_acc):
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ('*','*'), '*', '*', init_acc)
+    bs_line_fn = rec_finder.find_rec_filename(None, RecordType.BASELINE_REC)
+    if bs_line_fn is None:
+        optim = Optimizer(ps, (None,None), None, None)
+        optim.base_line_result()
+        bs_line_fn = rec_finder.find_rec_filename(None, RecordType.BASELINE_REC)
+    if bs_line_fn is None:
+        print(f' !!! Was not able to get baseline result for initial accuracy of {init_acc} !!!')
+        print(f' !!! Adjust TEST_SET_SIZE in Config.py !!!')
+        return bs_line_fn
+    return load_from_file(bs_line_fn, '')
