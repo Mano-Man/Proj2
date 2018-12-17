@@ -369,7 +369,8 @@ class Record():
 #                                               Final Result Record Class
 # ----------------------------------------------------------------------------------------------------------------------    
 class FinalResultRc():
-    def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, ones_range, net_name, dataset_name):
+    def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern,ps,max_acc_loss, 
+                 ones_range, net_name, dataset_name, layers_layout):
         self.filename = f'FR_{net_name}_{dataset_name}_acc{init_acc}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
@@ -382,6 +383,7 @@ class FinalResultRc():
         self.network = net_name
         self.dataset_name = dataset_name
         self.init_acc = init_acc
+        self.layers_layout = layers_layout
         
     def __str__(self):
         string =  "================================================================\n"

@@ -110,7 +110,8 @@ class LayerQuantizier():
             return
         f_rec = FinalResultRc(self.min_acc + self.max_acc_loss, self.resume_rec.curr_best_acc, self.resume_rec.curr_saved_ops, 
                               self.resume_rec.curr_tot_ops, self.mode, self.resume_rec.curr_best_mask, 
-                              self.patch_size, self.max_acc_loss, self.ones_range, cfg.NET.__name__, cfg.DATA_NAME)
+                              self.patch_size, self.max_acc_loss, self.ones_range, cfg.NET.__name__, 
+                              cfg.DATA_NAME, self.layers_layout)
         save_to_file(f_rec,True,cfg.RESULTS_DIR)
         #print('==> finished LayerQuantizier simulation!')
         print('==> result saved to ' + f_rec.filename)
