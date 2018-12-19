@@ -175,17 +175,15 @@ class Optimizer:
 
         run_time_for_iter = run_time_for_iter / no_of_tries
 
+        lQ_runs = sum([p+1 for p in recs_first_lvl.no_of_patterns])
         if mode == Mode.MAX_GRANULARITY:
             second_lvl_runs = sum([recs_first_lvl.no_of_channels[l] * recs_first_lvl.no_of_patterns[l] for l in
                                    range(recs_first_lvl.no_of_layers)])
-            second_lvl_runs += sum(recs_first_lvl.no_of_patterns)
-            lQ_runs = sum(recs_first_lvl.no_of_patterns)
+            second_lvl_runs += lQ_runs
         elif mode == Mode.UNIFORM_LAYER:
             second_lvl_runs = 0
-            lQ_runs = sum(recs_first_lvl.no_of_patterns)
         else:  # Mode.UNIFORM_PATCH or mode==Mode.UNIFORM_FILTERS
-            second_lvl_runs = sum(recs_first_lvl.no_of_patterns)
-            lQ_runs = second_lvl_runs  # sum(recs_first_lvl.no_of_patterns)
+            second_lvl_runs = lQ_runs
 
         no_of_runs = (first_lvl_runs, second_lvl_runs, lQ_runs)
         run_times = (round(run_time_for_iter, 3), self.get_full_net_run_time(no_of_tries))

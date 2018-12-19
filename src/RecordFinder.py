@@ -88,7 +88,7 @@ class RecordFinder():
         return (f'PatchQ_ma{self.max_acc_loss}_' + self._first_lvl_regex(mode))
     
     def _final_rec_regex(self, mode):
-        return f'FR_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[mode]}_ma{self.max_acc_loss}*pkl'
+        return f'FR_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[mode]}_ma{self.max_acc_loss}_*pkl'
       
     def _baseline_rec_regex(self):
         return f'BS_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_os*_bacc*pkl'

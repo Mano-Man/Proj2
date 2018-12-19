@@ -30,7 +30,7 @@ class ChannelQuantizier():
                                               dtype=self.input_patterns.dtype)
 
         if out_rec is None:
-            self._generate_patterns(rec.mode, rec.layers_layout, rec.gran_thresh, rec.filename, max_acc_loss)
+            self._generate_patterns(rec.mode, rec.layers_layout, rec.gran_thresh, rec.filename, max_acc_loss, init_acc)
         else:
             self.output_rec = out_rec
 
@@ -63,9 +63,9 @@ class ChannelQuantizier():
     def save_state(self):
         save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
 
-    def _generate_patterns(self, mode, layers_layout, gran_thresh, rec_in_filename, max_acc_loss):
+    def _generate_patterns(self, mode, layers_layout, gran_thresh, rec_in_filename, max_acc_loss, init_acc):
         #TODO - fix Record init   
-        self.output_rec = Record(layers_layout, gran_thresh, False, mode, None)
+        self.output_rec = Record(layers_layout, gran_thresh, False, mode, init_acc)
         self.output_rec.set_results_dimensions(no_of_layers=len(self.input),
                                                no_of_channels=[1]*len(self.input),
                                                no_of_patches=[1]*len(self.input))

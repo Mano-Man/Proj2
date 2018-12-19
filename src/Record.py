@@ -21,11 +21,13 @@ class Mode(Enum):
     UNIFORM_FILTERS = 1
     UNIFORM_PATCH = 2
     UNIFORM_LAYER = 3
+    ALL_MODES = 4
     
 gran_dict = {Mode.MAX_GRANULARITY:"max_granularity", 
              Mode.UNIFORM_FILTERS:"uniform_filters", 
              Mode.UNIFORM_PATCH:"uniform_patch", 
-             Mode.UNIFORM_LAYER:"uniform_layer"}
+             Mode.UNIFORM_LAYER:"uniform_layer",
+             Mode.ALL_MODES:"*"}
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -176,6 +178,7 @@ class Record():
         self.gran_thresh = gran_thresh
         self.layers_layout = layers_layout
         self.is_initialized = False
+        self.init_acc = initial_acc
         
         if gen_patches:
             self.no_of_layers = len(layers_layout)
@@ -304,6 +307,7 @@ class Record():
                     for pattern_idx in range(self.no_of_patterns[layer]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
                             return [layer, channel, patch_idx, pattern_idx]
+                        
     def fill_empty(self):
         assert self.is_initialized, 'Error: Record is not initialized!'
         for layer in range(self.no_of_layers):
@@ -311,7 +315,7 @@ class Record():
                 for patch_idx in range(self.no_of_patches[layer]):
                     for pattern_idx in range(self.no_of_patterns[layer]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
-                            self.results[layer][channel][patch_idx][pattern_idx] = (-1,-1,-1)
+                            self.results[layer][channel][patch_idx][pattern_idx] = (-1, 0, self.init_acc)
                         
     def is_full(self):
         return None==self.find_resume_point()
@@ -346,8 +350,9 @@ class Record():
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
                         if res_tuple[2] >= min_acc:
                             patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                            #patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
                             #patch.append((p_idx,res_tuple[0]/res_tuple[1],res_tuple[2]))
-                    patch.append((-1,-1,-1))
+                    patch.append((-1, 0, self.init_acc))
                     channel.append(patch)
                 layer.append(channel)
             slresults.append(layer)

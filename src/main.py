@@ -19,7 +19,7 @@ PATCH_SIZE = 2
 RANGE_OF_ONES = (1, 3)
 GRANULARITY_TH = 10
 ACC_LOSS = 2
-ACC_LOSS_OPTS = [0, 1, 2, 3, 5]
+ACC_LOSS_OPTS = [0, 1, 2, 3, 4, 5, 10]
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    
@@ -67,11 +67,16 @@ def main_plot_ops_saved_vs_ones(mode):
     plotting.plot_ops_saved_vs_ones(cfg.NET.__name__, cfg.DATA_NAME, ps, ones_possibilities, 
                            GRANULARITY_TH, ACC_LOSS, init_acc, mode)
     
-def main_plot_ops_saved_vs_max_acc_loss():
-    init_acc = eval_baseline_and_runtimes(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH)
-    run_all_acc_loss_possibilities(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH)
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, PATCH_SIZE, RANGE_OF_ONES,
-                                   GRANULARITY_TH, ACC_LOSS_OPTS, init_acc)
+def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
+    init_acc = get_init_acc(ps, ones_range, gran_th)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_LAYER)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_FILTERS)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_PATCH)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, ps, ones_range,
+                                   gran_th, ACC_LOSS_OPTS, init_acc, title=title)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.MAX_GRANULARITY)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, ps, ones_range,
+                                   gran_th, ACC_LOSS_OPTS, init_acc)
 
 def training_main():
     nn = NeuralNet()  # Spatial layers are by default, disabled
@@ -81,4 +86,7 @@ def training_main():
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
 if __name__ == '__main__':
-    main_plot_ops_saved_vs_ones()
+    eval_baseline_and_runtimes(3,(3,4),10)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.MAX_GRANULARITY)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, 2, (1,3),
+                                   10, ACC_LOSS_OPTS, 93.5)
