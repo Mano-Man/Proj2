@@ -60,7 +60,7 @@ class PatchQuantizier():
                     if save_counter > cfg.SAVE_INTERVAL:
                         self.save_state()
                         save_counter = 0
-        self.output_rec.save_to_csv(cfg.RESULTS_DIR)
+        
         self.output_rec.fill_empty()
         self.save_state()
         

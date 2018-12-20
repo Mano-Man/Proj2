@@ -53,8 +53,8 @@ class ChannelQuantizier():
                 if save_counter > cfg.SAVE_INTERVAL:
                     self.save_state()
                     save_counter = 0
+        
         self.save_state()
-        self.output_rec.save_to_csv(cfg.RESULTS_DIR)
         print('==> finised ChannelQuantizier simulation.')
 
     def is_finised(self):

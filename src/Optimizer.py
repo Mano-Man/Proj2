@@ -235,7 +235,6 @@ class Optimizer:
                 save_counter = 0
 
         save_to_file(rcs, True, cfg.RESULTS_DIR)
-        rcs.save_to_csv(cfg.RESULTS_DIR)
         print('==> Result saved to ' + os.path.join(cfg.RESULTS_DIR, rcs.filename))
         return rcs
 

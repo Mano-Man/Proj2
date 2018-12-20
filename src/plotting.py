@@ -1,14 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from RecordFinder import RecordFinder
 from Optimizer import Optimizer
 from Record import RecordType, Mode, gran_dict, load_from_file
 import Config as cfg
     
-def show_final_mask(show_all_layers=False, layers_to_show=None, channels_to_show=None, plot_3D=False,
-                    net_name='*', dataset_name='*', mode=Mode.ALL_MODES, ps='*', ones_range=('*','*'), 
-                    acc_loss='*', gran_thresh='*', init_acc='*'):
+def show_final_mask(show_all_layers=False, layers_to_show=None, show_all_channels=False, 
+                    channels_to_show=None, plot_3D=False, net_name='*', dataset_name='*', 
+                    mode=Mode.ALL_MODES, ps='*', ones_range=('*','*'), acc_loss='*', 
+                    gran_thresh='*', init_acc='*'):
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
     final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
     if final_rec_fn is None:
@@ -38,7 +40,9 @@ def show_final_mask(show_all_layers=False, layers_to_show=None, channels_to_show
         else:
             if plot_3D:
                 show_layer(l_to_plot_idx, rec.layers_layout[l_to_plot_idx], l_to_plot) 
-            if channels_to_show is None:
+            if show_all_channels:
+                channels = range(rec.layers_layout[l_to_plot_idx][0])
+            elif channels_to_show is None:
                 channels = [0, round(rec.layers_layout[l_to_plot_idx][0]/2), rec.layers_layout[l_to_plot_idx][0]-1]
             elif type(channels_to_show) is list and type(channels_to_show[0]) is list:
                 channels = channels_to_show[idx]
@@ -51,11 +55,11 @@ def show_final_mask(show_all_layers=False, layers_to_show=None, channels_to_show
     
 def plot_ops_saved_vs_ones(net_name, dataset_name, ps, ones_possibilities, gran_thresh, acc_loss, init_acc, 
                            modes=None):
-    bs_line_rec = get_baseline_rec(net_name, dataset_name, ps, init_acc)
-    plt.figure()
-    if bs_line_rec is not None:
-        plt.plot(ones_possibilities, [round(bs_line_rec.ops_saved/bs_line_rec.total_ops, 3)]*len(ones_possibilities),
-                                      'o--', label=f'baseline, {round(bs_line_rec.init_acc-bs_line_rec.baseline_acc, 2)}% loss')
+#    bs_line_rec = get_baseline_rec(net_name, dataset_name, ps, init_acc)
+#    plt.figure()
+#    if bs_line_rec is not None:
+#        plt.plot(ones_possibilities, [bs_line_rec.ops_saved/bs_line_rec.total_ops]*len(ones_possibilities),
+#                                      '--', label=f'baseline, {round(bs_line_rec.init_acc-bs_line_rec.baseline_acc, 2)}% loss')
     
     modes = get_modes(modes)
     for mode in modes:
@@ -86,7 +90,7 @@ def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_
     if bs_line_rec is not None:
         plt.plot(acc_loss_opts, [round(bs_line_rec.ops_saved/bs_line_rec.total_ops, 3)]*len(acc_loss_opts),
                                  '--', label=f'baseline')
-        plt.axvline(x=bs_line_rec.init_acc-bs_line_rec.baseline_acc, linestyle='--', label='baseline acc loss')
+        plt.axvline(x=bs_line_rec.init_acc-bs_line_rec.baseline_acc, linestyle='--', label='baseline')
 
     modes = get_modes(modes)   
     for mode in modes:
@@ -123,7 +127,7 @@ def show_channel(layer, channel, dims, image, ps, filename=None):
     ax.set_xticks(np.arange(-.5, image.shape[0]-1, ps), minor=True);
     ax.set_yticks(np.arange(-.5, image.shape[1]-1, ps), minor=True);
     # Gridlines based on minor ticks
-    ax.grid(which='minor', color='w', linestyle='-', linewidth=1)
+    ax.grid(which='minor', color='w', linestyle='-', linewidth=2)
     plt.tick_params(axis='both', which='major', bottom=False, top=False,
                     left=False, right=False, labelbottom=False, labelleft=False)
     if filename is None:

@@ -76,7 +76,7 @@ class RecordFinder():
     
     def _lQ_resume_regex(self, mode):
         regex = f'LayerQ_ma{self.max_acc_loss}_'
-        if mode == Mode.UNIFORM_PATCH:
+        if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
             regex += self._cQ_regex(mode)
         elif mode == Mode.UNIFORM_FILTERS:
             regex += self._pQ_regex(mode)
@@ -93,4 +93,4 @@ class RecordFinder():
     def _baseline_rec_regex(self):
         return f'BS_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_os*_bacc*pkl'
 
-      
+     
