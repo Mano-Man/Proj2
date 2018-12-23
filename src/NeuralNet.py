@@ -56,7 +56,7 @@ class NeuralNet:
                 self.start_epoch = checkpoint['epoch']
                 assert (dat.name() == checkpoint['dataset'])
 
-                print(f'==> Loaded model with val-acc of {self.best_val_acc}')
+                print(f'==> Loaded model with val-acc of {self.best_val_acc:.3f}')
 
         else:
             self.best_val_acc = 0
@@ -124,7 +124,7 @@ class NeuralNet:
         count = f'{correct}/{total}'
 
         if print_it:
-            print(f'==> Asserted test-acc of: {test_acc} [{count}]\n ')
+            print(f'==> Asserted test-acc of: {test_acc:.3f} [{count}]')
         return test_loss, test_acc, count
 
     def summary(self, x_size, print_it=True):

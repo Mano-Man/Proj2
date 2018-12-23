@@ -1,5 +1,6 @@
 # Models: (There are many more)
 from models.resnet import ResNet18, ResNet18Spatial, ResNet34Spatial
+from models.alexnet import AlexNetS
 from util.datasets import Datasets
 import os
 
@@ -21,11 +22,11 @@ DATASET_DIR = os.path.join(basedir, 'datasets')
 #                                                 Global Config
 # ----------------------------------------------------------------------------------------------------------------------
 # Global Adjustments:
-NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial]
+NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial, AlexNetS]
 NET = NETS[1]  # The chosen network
 
 # print(Datasets.which()) # ('MNIST', 'CIFAR10', 'ImageNet','STL10)
-DATA = Datasets.get('MNIST')
+DATA = Datasets.get('CIFAR10')
 
 BATCH_SIZE = 128
 TEST_SET_SIZE = BATCH_SIZE * 8  # Better to align it to Batch Size for speed!

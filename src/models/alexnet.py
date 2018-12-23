@@ -4,10 +4,10 @@ from .SpatialNet import Spatial, SpatialNet
 
 class AlexNetS(SpatialNet):
 
-    def __init__(self,device,num_classes=1000):
+    def __init__(self,device, output_channels, input_channels):
         super().__init__(device)
         self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
+            nn.Conv2d(input_channels, 64, kernel_size=11, stride=4, padding=2),
             nn.ReLU(inplace=True),
             Spatial(64),
             nn.MaxPool2d(kernel_size=3, stride=2),
@@ -33,7 +33,7 @@ class AlexNetS(SpatialNet):
             nn.Dropout(),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Linear(4096, num_classes),
+            nn.Linear(4096, output_channels),
         )
 
     def forward(self, x):
