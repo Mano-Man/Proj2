@@ -8,8 +8,11 @@ import numpy as np
 #                                               	    Misc
 # ----------------------------------------------------------------------------------------------------------------------
 
-def banner(text, ch='=', length=78):
-    spaced_text = ' %s ' % text
+def banner(text=None, ch='=', length=78):
+    if text is not None:
+        spaced_text = ' %s ' % text
+    else:
+        spaced_text = ''
     print('\n',spaced_text.center(length, ch))
 
 # ----------------------------------------------------------------------------------------------------------------------

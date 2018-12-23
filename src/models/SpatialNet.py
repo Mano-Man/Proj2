@@ -74,7 +74,7 @@ class Spatial(nn.Module):
             x = torch.nn.functional.pad(x, (0, self.pad_s, 0, self.pad_s), value=0)  # Pad with ZEROS
 
         if x.size(0) != self.batch_size:
-            print('Batch size event')  # - Will happen once every test forward
+            #print('Batch size event')  # - Will happen once every test forward
             batch_mask = self.batch_mask[:x.size(0), :, :, :]
         else:
             batch_mask = self.batch_mask
@@ -122,6 +122,9 @@ class SpatialNet(PytorchNet):
         for sp in self.spatial_layers:
             sp.reset_ops()
 
+    def name(self):
+        return self.__class__.__name__
+
     def num_ops(self):
         ops_saved = 0
         total_ops = 0
@@ -138,14 +141,19 @@ class SpatialNet(PytorchNet):
                 print(f'Spatial Layer {i}: Ops saved: {l.ops_saved}/{l.total_ops}')
             else:
                 spacer = ' ' * (len(str(len(self.spatial_layers))) - len(str(i)))
+                assert(l.ops_saved <= all_ops_saved)
+                if all_ops_saved ==0: # Handle div by 0 case
+                    midstr = '0'
+                else:
+                    midstr = f'{l.ops_saved*100/all_ops_saved:.3f}'
                 print(
                     f'Spatial Layer {i}:{spacer} Ops saved: {l.ops_saved*100 /l.total_ops:.3f} % [{int(l.ops_saved)} / {l.total_ops}]',
-                    f'of [{l.ops_saved*100/all_ops_saved:.3f} % / {l.total_ops*100/all_total_ops:.3f} %]')
+                    f'of [{midstr} % / {l.total_ops*100/all_total_ops:.3f} %]')
 
         if all_total_ops > 0:
-            print(f'Grand total: {all_ops_saved}/{all_total_ops:.3f} {all_ops_saved*100/all_total_ops:.3f} %')
+            print(f'Grand total: {all_ops_saved}/{all_total_ops} {all_ops_saved*100/all_total_ops:.3f} %')
         else:
-            print(f'Grand total: {all_ops_saved}/{all_total_ops:.3f}')
+            print(f'Grand total: {all_ops_saved}/{all_total_ops}')
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size):
 
