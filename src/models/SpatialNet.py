@@ -156,9 +156,10 @@ class SpatialNet(PytorchNet):
         else:
             print(f'Grand total: {all_ops_saved}/{all_total_ops}')
 
-    def initialize_spatial_layers(self, x_shape, batch_size, p_size):
+    def initialize_spatial_layers(self, x_shape, batch_size, p_size,freeze=True):
 
-        self.eval() #LOCK Network
+        if freeze:
+            self.eval() #LOCK Network for testing only
         # From init phase and on, set the spatial sizes
         self.x_shape = x_shape
         self.p_size = p_size
