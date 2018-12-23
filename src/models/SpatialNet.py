@@ -27,6 +27,7 @@ class Spatial(nn.Module):
         self.padded_in_shape, self.use_cuda, self.pad_s = (None, None, None)
         self.conv_filt, self.batch_mask = (None, None)
 
+
     def init_to_input(self, p_size, batch_size, in_shape, padded_in_shape, use_cuda):
 
         self.p_size, self.batch_size, self.in_shape, self.padded_in_shape, self.use_cuda = \
@@ -157,6 +158,7 @@ class SpatialNet(PytorchNet):
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size):
 
+        self.eval() #LOCK Network
         # From init phase and on, set the spatial sizes
         self.x_shape = x_shape
         self.p_size = p_size

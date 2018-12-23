@@ -170,12 +170,15 @@ def debug():
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     # Test One:
     nn1.test(test_gen, print_it=True)
+    # for x,y in test_gen:
+    #     print(y)
     nn1.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
     nn1.test(test_gen, print_it=True)
 
     # Test Two:
     nn2.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
     nn2.test(test_gen, print_it=True)
+
 
 
 if __name__ == '__main__':
