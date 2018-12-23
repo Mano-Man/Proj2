@@ -11,7 +11,7 @@ import os
 import csv
 
 import Config as cfg
-
+from Config import DATA as dat
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                              Granularity Modes Definition
@@ -211,7 +211,7 @@ class Record():
 
             self.rec_type = RecordType.FIRST_LVL_REC
 
-            self.filename = (f'{cfg.NET.__name__}_{cfg.DATA_NAME}_acc{initial_acc}'
+            self.filename = (f'{cfg.NET.__name__}_{dat.name()}_acc{initial_acc}'
                              f'_{gran_dict[self.mode]}_ps{argv[0]}_ones{argv[1][0]}x{argv[1][1]}'
                              f'_mg{round(gran_thresh,0)}_{int(time.time())}')
             self._create_results()

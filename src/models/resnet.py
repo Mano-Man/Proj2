@@ -10,12 +10,12 @@ from .SpatialNet import Spatial, SpatialNet
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    NN Spatial Configurations
 # ----------------------------------------------------------------------------------------------------------------------
-def ResNet18Spatial(device, **kwargs):
-    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, **kwargs)
+def ResNet18Spatial(device, output_channels, input_channels, **kwargs):
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, **kwargs)
 
 
-def ResNet34Spatial(device, **kwargs):
-    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, **kwargs)
+def ResNet34Spatial(device, output_channels, input_channels, **kwargs):
+    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, output_channels, input_channels, **kwargs)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -53,7 +53,7 @@ class BasicBlockS(nn.Module):
 
 
 class ResNetS(SpatialNet):
-    def __init__(self, block, blocks_per_layer, device, num_classes=10):
+    def __init__(self, block, blocks_per_layer, device, output_channels, input_channels):
         super().__init__(device)
 
         # ResNet Definitions:
@@ -61,14 +61,14 @@ class ResNetS(SpatialNet):
         self.blocks_per_layer = blocks_per_layer
 
         # Net Structure: Spatial layers are turned off by default
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.pred = Spatial(64)
+        self.conv1 = nn.Conv2d(input_channels, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(self.in_planes)
+        self.pred = Spatial(self.in_planes)
         self.layer1 = self._populate_block(block, 64, blocks_per_layer[0], stride=1)
         self.layer2 = self._populate_block(block, 128, blocks_per_layer[1], stride=2)
         self.layer3 = self._populate_block(block, 256, blocks_per_layer[2], stride=2)
         self.layer4 = self._populate_block(block, 512, blocks_per_layer[3], stride=2)
-        self.linear = nn.Linear(512 * block.expansion, num_classes)
+        self.linear = nn.Linear(512 * block.expansion, output_channels)
 
         # TODO - Override Super variable - Find some more elegant way to do this
         self.spatial_layers = [self.pred]
@@ -100,8 +100,8 @@ class ResNetS(SpatialNet):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    # ----------------------------------------------------------------------------------------------------------------------
-    #                                                   Reguler Version
+        # ----------------------------------------------------------------------------------------------------------------------
+        #                                                   Reguler Version
 
 
 # ----------------------------------------------------------------------------------------------------------------------

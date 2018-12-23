@@ -38,7 +38,7 @@ class NeuralNet:
             print('WARNING: Found no valid GPU device - Running on CPU')
         # Build Model:
         print(f'==> Building model {net.__name__} on the dataset {dat.name()}')
-        self.net = net(self.device)  # TODO - Implement support to enable num_of_input_channels == 1 (MNIST)
+        self.net = net(self.device, dat.num_classes(), dat.input_channels())
 
         if resume:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
@@ -69,10 +69,11 @@ class NeuralNet:
         self.train_gen, self.val_gen, self.classes = (None, None, None)
         self.optimizer = None
 
-    def train(self, epochs, set_size, lr, batch_size=cfg.BATCH_SIZE):
+    def train(self, epochs,lr=0.1, set_size=None,batch_size=cfg.BATCH_SIZE):
 
+
+        (self.train_gen, set_size), (self.val_gen, _) = dat.trainset(batch_size=batch_size, max_samples=set_size)
         print(f'==> Training on {set_size} samples with batch size of {batch_size} and lr = {lr}')
-        (self.train_gen, _), (self.val_gen, _) = dat.trainset(batch_size=batch_size, max_samples=set_size)
         self.optimizer = optim.SGD(filter(lambda x: x.requires_grad, self.net.parameters()), lr=lr, momentum=0.9,
                                    weight_decay=5e-4)
 
@@ -149,6 +150,7 @@ class NeuralNet:
                     save_it = False
                     print(f'\nResuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
         # Do checkpoint
+        val_acc = round(val_acc,3) # Don't allow too long a number
         if save_it:
             print(f'\nBeat val_acc record of {self.best_val_acc} with {val_acc} - Saving checkpoint')
             state = {

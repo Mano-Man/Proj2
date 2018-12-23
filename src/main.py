@@ -88,7 +88,7 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 
 def training():
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
-    nn.train(epochs=30, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)
+    nn.train(epochs=10, lr=0.01)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
@@ -154,7 +154,7 @@ def data_tutorial():
     print(dat.max_train_size())
     print(dat.shape())
     (train_loader, num_train), (valid_loader, num_valid) = dat.trainset(batch_size=cfg.BATCH_SIZE,
-                                                                        max_samples=cfg.TRAIN_SET_SIZE,
+                                                                        max_samples=dat.max_train_size(),
                                                                         show_sample=True)
     test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
 
@@ -182,7 +182,7 @@ def debug():
 
 
 if __name__ == '__main__':
-    debug()
+    training()
 
 
     # if __name__ == '__main__':

@@ -174,19 +174,19 @@ class CIFAR10(ClassificationDataset):
 class MNIST(ClassificationDataset):
     def __init__(self):
         super().__init__(class_labels=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
-                         shape=(3, 28, 28), testset_size=10000, trainset_size=60000, dataset_space=55443456,
+                         shape=(1, 28, 28), testset_size=10000, trainset_size=60000, dataset_space=55443456,
                          expected_files=[os.path.join('processed', 'training.pt'),
                                          os.path.join('processed', 'test.pt')])
 
-    def _train_importer(self, augment): # Convert 1 channels -> 3 channels
-        ops = [transforms.Grayscale(3), transforms.ToTensor(),
-               transforms.Normalize(mean=(0.1307, 0.1307, 0.1307), std=(0.3081, 0.3081, 0.3081))]
+    def _train_importer(self, augment):  # Convert 1 channels -> 3 channels #transforms.Grayscale(3),
+        ops = [transforms.ToTensor(),
+               transforms.Normalize(mean=(0.1307,), std=(0.3081,))]
         return datasets.MNIST(root=self._data_dir, train=True, download=self._download,
                               transform=transforms.Compose(ops))
 
     def _test_importer(self):  # Convert 1 channels -> 3 channels
-        ops = [transforms.Grayscale(3), transforms.ToTensor(),
-               transforms.Normalize(mean=(0.1307, 0.1307, 0.1307), std=(0.3081, 0.3081, 0.3081))]
+        ops = [transforms.ToTensor(),
+               transforms.Normalize(mean=(0.1307,), std=(0.3081,))]
         return datasets.MNIST(root=self._data_dir, train=False, download=self._download,
                               transform=transforms.Compose(ops))
 

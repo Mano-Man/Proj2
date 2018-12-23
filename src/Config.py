@@ -25,7 +25,7 @@ NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial]
 NET = NETS[1]  # The chosen network
 
 # print(Datasets.which()) # ('MNIST', 'CIFAR10', 'ImageNet','STL10)
-DATA = Datasets.get('CIFAR10')
+DATA = Datasets.get('MNIST')
 
 BATCH_SIZE = 128
 TEST_SET_SIZE = BATCH_SIZE * 8  # Better to align it to Batch Size for speed!

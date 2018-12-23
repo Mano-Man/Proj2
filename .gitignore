@@ -8,7 +8,7 @@ __pycache__/
 !*/data/checkpoint/
 /data/checkpoint/*
 !*/data/checkpoint/ResNet18Spatial_CIFAR10_99.34_ckpt.t7
-!*/data/checkpoint/ResNet18Spatial_MNIST_99.2_ckpt.t7
+!*/data/checkpoint/ResNet18Spatial_MNIST_99.266_ckpt.t7
 
 .idea 
 # C extensions
