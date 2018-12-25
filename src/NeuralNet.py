@@ -3,6 +3,7 @@ import torch
 import torch.nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # Utils:
 import re
@@ -38,7 +39,7 @@ class NeuralNet:
             print('WARNING: Found no valid GPU device - Running on CPU')
         # Build Model:
         print(f'==> Building model {net.__name__} on the dataset {dat.name()}')
-        self.net = net(self.device, dat.num_classes(), dat.input_channels())
+        self.net = net(self.device, dat.num_classes(), dat.input_channels(), dat.shape())
 
         if resume:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
@@ -69,13 +70,13 @@ class NeuralNet:
         self.train_gen, self.val_gen, self.classes = (None, None, None)
         self.optimizer = None
 
-    def train(self, epochs,lr=0.1, set_size=None,batch_size=cfg.BATCH_SIZE):
-
+    def train(self, epochs, lr=0.1, set_size=None, batch_size=cfg.BATCH_SIZE):
 
         (self.train_gen, set_size), (self.val_gen, _) = dat.trainset(batch_size=batch_size, max_samples=set_size)
         print(f'==> Training on {set_size} samples with batch size of {batch_size} and lr = {lr}')
         self.optimizer = optim.SGD(filter(lambda x: x.requires_grad, self.net.parameters()), lr=lr, momentum=0.9,
                                    weight_decay=5e-4)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=5)
 
         p = Progbar(epochs)
         t_start = time.time()
@@ -87,14 +88,16 @@ class NeuralNet:
                 t_step_start = time.time()
             train_loss, train_acc, train_count = self._train_step()
             val_loss, val_acc, val_count = self.test(self.val_gen)
+            self.scheduler.step(val_loss)
             if cfg.VERBOSITY > 0:
                 t_step_end = time.time()
                 batch_time = round((t_step_end - t_step_start) / batches_per_step, 3)
                 p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),
-                                 ("batch_time", batch_time)])
+                                 ("batch_time", batch_time), ("lr", self.optimizer.param_groups[0]['lr'])])
             else:
                 p.add(1,
-                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
+                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),
+                              ("lr", self.optimizer.param_groups[0]['lr'])])
             self._checkpoint(val_acc, epoch + 1)
         t_end = time.time()
         print(f'==> Total train time: {t_end-t_start:.3f} secs :: per epoch: {(t_end-t_start)/epochs:.3f} secs')
@@ -133,8 +136,8 @@ class NeuralNet:
     def print_weights(self):
         self.net.print_weights()
 
-    def output_size(self, x_shape):
-        return self.net.output_size(x_shape)
+    def output_size(self, x_shape, cuda_allowed=True):
+        return self.net.output_size(x_shape, cuda_allowed)
 
     def _checkpoint(self, val_acc, epoch):
 
@@ -150,7 +153,7 @@ class NeuralNet:
                     save_it = False
                     print(f'\nResuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
         # Do checkpoint
-        val_acc = round(val_acc,3) # Don't allow too long a number
+        val_acc = round(val_acc, 3)  # Don't allow too long a number
         if save_it:
             print(f'\nBeat val_acc record of {self.best_val_acc} with {val_acc} - Saving checkpoint')
             state = {
@@ -232,7 +235,7 @@ class NeuralNet:
         if not checkpoints:
             return None
         else:
-            checkpoints.sort(key=lambda x: x.replace(f'{net.__name__}_{dat.name()}', '').split('_')[1])
+            checkpoints.sort(key=lambda x: float(x.replace(f'{net.__name__}_{dat.name()}', '').split('_')[1]))
             # print(checkpoints)
             return os.path.join(cfg.CHECKPOINT_DIR, checkpoints[-1])
 

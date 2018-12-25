@@ -11,6 +11,7 @@ from Config import DATA as dat
 import plotting
 from Record import Mode, gran_dict, RecordType, load_from_file
 from RecordFinder import RecordFinder
+import random
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                     Consts
@@ -88,7 +89,8 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 
 def training():
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
-    nn.train(epochs=10, lr=0.1)
+    nn.summary(dat.shape())
+    nn.train(epochs=50, lr=0.1)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
@@ -109,7 +111,7 @@ def info_tutorial():
     print(nn.output_size(x_shape))
 
     # Spatial Operations, defined one the net itself. Remember that after enabling a layer, ops are affected
-    assert nn.net.num_spatial_layers() == 17
+    assert nn.net.num_spatial_layers() != 0
     nn.net.print_spatial_status()
     nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
     nn.net.print_ops_summary()
@@ -131,14 +133,15 @@ def info_tutorial():
     nn.net.print_ops_summary()
     nn.net.reset_spatial()  # Disables layers as well
     nn.net.print_ops_summary()
-    # Turns on ids [0,3,16] and turns off all others
-    nn.net.strict_mask_update(update_ids=[0, 3, 16],
-                              masks=[torch.zeros(p_spat_sizes[0]), torch.zeros(p_spat_sizes[3]),
-                                     torch.zeros(p_spat_sizes[16])])
+    # Turns on 3 ids and turns off all others
+    chosen_victims = random.sample(range(nn.net.num_spatial_layers()), 4)
+    nn.net.strict_mask_update(update_ids=chosen_victims[0:3],
+                              masks=[torch.zeros(p_spat_sizes[chosen_victims[0]]), torch.zeros(p_spat_sizes[chosen_victims[1]]),
+                                     torch.zeros(p_spat_sizes[chosen_victims[2]])])
 
-    # Turns on ids [2] and *does not* turn off all others
-    nn.net.lazy_mask_update(update_ids=[2], masks=[torch.zeros(p_spat_sizes[2])])
-    nn.net.print_spatial_status()  # Now only 0,2,3,16 are enabled.
+    # Turns on one additional id and *does not* turn off all others
+    nn.net.lazy_mask_update(update_ids=[chosen_victims[3]], masks=[torch.zeros(p_spat_sizes[chosen_victims[3]])])
+    nn.net.print_spatial_status()  #
     print(nn.net.enabled_layers())
     nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Run with 4 layers on
     nn.net.print_ops_summary()
@@ -184,7 +187,7 @@ def debug():
 
 
 if __name__ == '__main__':
-    debug()
+    training()
 
 
     # if __name__ == '__main__':

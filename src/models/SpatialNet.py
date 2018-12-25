@@ -253,16 +253,27 @@ class SpatialNet(PytorchNet):
                 self.enable_spatial_layers(enabled)
                 return summary
 
-    def output_size(self, x_shape):
+    def output_size(self, x_shape,cuda_allowed=False):
 
         if self.sp is None:
-            return super().output_size(x_shape)
+            return super().output_size(x_shape,cuda_allowed)
         else:
             enabled = self.enabled_layers()
             if not enabled:
-                return super().output_size(x_shape)
+                return super().output_size(x_shape,cuda_allowed)
             else:
                 self.disable_spatial_layers(enabled)
-                siz = super().output_size(x_shape)
+                siz = super().output_size(x_shape,cuda_allowed)
                 self.enable_spatial_layers(enabled)
                 return siz
+
+
+
+def sequential_spatial_layer_extract(seq_model):
+    spatial_layers = []
+    for idx, m in enumerate(seq_model.modules()):
+        #print(idx, '->', m)
+        if isinstance(m,Spatial):
+            spatial_layers.append(m)
+    return spatial_layers
+

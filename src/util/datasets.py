@@ -195,7 +195,7 @@ class STL10(ClassificationDataset):
     def __init__(self):
         super().__init__(
             class_labels=['airplane', 'bird', 'car', 'cat', 'deer', 'dog', 'horse', 'monkey', 'ship', 'truck'],
-            shape=(3, 96, 96), testset_size=8000, trainset_size=5000, dataset_space=0,
+            shape=(3, 96, 96), testset_size=8000, trainset_size=5000, dataset_space=2640400384,
             expected_files='stl10_binary.tar.gz')
 
     def _train_importer(self, augment):

@@ -10,12 +10,12 @@ from .SpatialNet import Spatial, SpatialNet
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    NN Spatial Configurations
 # ----------------------------------------------------------------------------------------------------------------------
-def ResNet18Spatial(device, output_channels, input_channels, **kwargs):
-    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, **kwargs)
+def ResNet18Spatial(device, output_channels, input_channels,data_shape):
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape)
 
 
-def ResNet34Spatial(device, output_channels, input_channels, **kwargs):
-    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, output_channels, input_channels, **kwargs)
+def ResNet34Spatial(device, output_channels, input_channels,data_shape):
+    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, output_channels, input_channels, data_shape)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -53,7 +53,7 @@ class BasicBlockS(nn.Module):
 
 
 class ResNetS(SpatialNet):
-    def __init__(self, block, blocks_per_layer, device, output_channels, input_channels):
+    def __init__(self, block, blocks_per_layer, device, output_channels, input_channels,data_shape):
         super().__init__(device)
 
         # ResNet Definitions:
@@ -68,7 +68,12 @@ class ResNetS(SpatialNet):
         self.layer2 = self._populate_block(block, 128, blocks_per_layer[1], stride=2)
         self.layer3 = self._populate_block(block, 256, blocks_per_layer[2], stride=2)
         self.layer4 = self._populate_block(block, 512, blocks_per_layer[3], stride=2)
-        self.linear = nn.Linear(512 * block.expansion, output_channels)
+
+        # This is a dirty hack to fit the dense layer to any needed size.
+        self.linear = lambda x: x
+        linear_size = self.output_size(x_shape=data_shape,cuda_allowed=False)
+
+        self.linear = nn.Linear(linear_size * block.expansion, output_channels)
 
         # TODO - Override Super variable - Find some more elegant way to do this
         self.spatial_layers = [self.pred]
