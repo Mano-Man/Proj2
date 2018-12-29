@@ -57,7 +57,7 @@ class LayerQuantResumeRec():
             self.is_final = [True]*len(self.is_final)
         elif layer is not None:
             self.is_final[layer] = True
-    
+
     def is_finised(self):
         return self.should_reset() and self.reset_occured
 
@@ -113,6 +113,7 @@ class LayerQuantizier():
     def number_of_iters(self):
         no_of_patterns = [len(self.input[l_idx]) for l_idx in range(len(self.input))]
         return sum(no_of_patterns)
+
 
     def simulate(self, nn, test_gen):
         print('==> starting LayerQuantizier simulation.')
@@ -212,6 +213,7 @@ class LayerQuantizier():
         
         if l_to_inc is not None:
             self.resume_rec.resume_index[l_to_inc] = self.resume_rec.resume_index[l_to_inc]+1
+
         return l_to_inc
 
     def _clean_input(self):

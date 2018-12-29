@@ -1,278 +1,284 @@
 import os
-import urllib
-
-# Torch Libraries:
 import torch
 from torchvision import datasets
 from torchvision import transforms
 from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 import matplotlib.pyplot as plt
 import numpy as np
+from .gen import banner
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-#                                               	 Torch - ImageNet
+#                                                Base Class
 # ----------------------------------------------------------------------------------------------------------------------
-def ImageNet_shape():
-    return (3, 256, 256)
+class ClassificationDataset:
+    def __init__(self, class_labels, shape, testset_size, trainset_size, dataset_space, expected_files):
+        # Basic Dataset Info
+        self._class_labels = tuple(class_labels)
+        self._shape = tuple(shape)
+        self._testset_size = testset_size
+        self._trainset_size = trainset_size
+        self._dataset_space = dataset_space
+
+        # Hard Coded
+        from src.Config import DATASET_DIR
+        self._data_dir = DATASET_DIR
+        if not isinstance(expected_files, list):
+            self._expected_files = [expected_files]
+        else:
+            self._expected_files = expected_files
+
+        self._download = True if any(
+            not os.path.isfile(os.path.join(self._data_dir, file)) for file in self._expected_files) else False
+
+    def data_summary(self):
+        img_type = 'Grayscale' if self._shape[0] == 1 else 'Color'
+        banner('Dataset Summary')
+        print(f'\n* Dataset Name: {self.name()} , {img_type} images')
+        print(f'* Data shape: {self._shape}')
+        print(f'* Training Set Size: {self._trainset_size} samples')
+        print(f'* Test Set Size: {self._testset_size} samples')
+        print(f'* Estimated Hard-disk space required: ~{convert_bytes(self._dataset_space)}')
+        print(f'* Number of classes: {self.num_classes()}')
+        print(f'* Class Labels:\n', self._class_labels)
+        banner()
+
+    def name(self):
+        assert self.__class__.__name__ != 'ClassificationDataset'
+        return self.__class__.__name__
+
+    def dataset_space(self):
+        return self._dataset_space
+
+    def num_classes(self):
+        return len(self._class_labels)
+
+    def class_labels(self):
+        return self._class_labels
+
+    def input_channels(self):
+        return self._shape[0]
+
+    def shape(self):
+        return self._shape
+
+    def max_test_size(self):
+        return self._testset_size
+
+    def max_train_size(self):
+        return self._trainset_size
+
+    def testset(self, batch_size, max_samples=None, device='cuda'):
+
+        if device.lower() == 'cuda' and torch.cuda.is_available():
+            num_workers, pin_memory = 1, True
+        else:
+            print('Warning: Did not find working GPU - Loading dataset on CPU')
+            num_workers, pin_memory = 4, False
+
+        test_dataset = self._test_importer()
+
+        if max_samples < self._testset_size:
+            testset_siz = max_samples
+            test_sampler = SequentialSampler(list(range(max_samples)))
+        else:
+            test_sampler = None
+            testset_siz = self._testset_size
+
+        test_gen = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler,
+                                               num_workers=num_workers, pin_memory=pin_memory)
+
+        return test_gen, testset_siz
+
+    def trainset(self, batch_size, valid_size=0.1, max_samples=None, augment=True, shuffle=True, random_seed=None,
+                 show_sample=False, device='cuda'):
+
+        if device.lower() == 'cuda' and torch.cuda.is_available():
+            num_workers, pin_memory = 1, True
+        else:
+            print('Warning: Did not find working GPU - Loading dataset on CPU')
+            num_workers, pin_memory = 4, False
+
+        max_samples = self._trainset_size if max_samples is None else min(self._trainset_size, max_samples)
+        assert ((valid_size >= 0) and (valid_size <= 1)), "[!] Valid_size should be in the range [0, 1]."
+
+        train_dataset = self._train_importer(augment)
+        val_dataset = self._train_importer(False)  # Don't augment validation
+
+        indices = list(range(self._trainset_size))
+        if shuffle:
+            if random_seed is not None:
+                np.random.seed(random_seed)
+            np.random.shuffle(indices)
+
+        indices = indices[:max_samples]  # Truncate to desired size
+        # Split validation
+        split = int(np.floor(valid_size * max_samples))
+        train_ids, valid_ids = indices[split:], indices[:split]
+
+        num_train = len(train_ids)
+        num_valid = len(valid_ids)
+
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,
+                                                   sampler=SubsetRandomSampler(train_ids), num_workers=num_workers,
+                                                   pin_memory=pin_memory)
+        valid_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size,
+                                                   sampler=SubsetRandomSampler(valid_ids), num_workers=num_workers,
+                                                   pin_memory=pin_memory)
+
+        if show_sample: self._show_sample(train_dataset, 4)
+
+        return (train_loader, num_train), (valid_loader, num_valid)
+
+    def _show_sample(self, train_dataset, siz):
+        images, labels = iter(torch.utils.data.DataLoader(train_dataset, batch_size=siz ** 2)).next()
+        plot_images(images.numpy().transpose([0, 2, 3, 1]), labels, self._class_labels, siz=siz)
+
+    def _train_importer(self, augment):
+        raise NotImplementedError
+
+    def _test_importer(self):
+        raise NotImplementedError
 
 
-def ImageNet_train(batch_size,
-                   dataset_size=50000,
-                   data_dir='./data',
-                   shuffle=True,
-                   show_sample=False,
-                   num_workers=1,
-                   pin_memory=True):
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                  Implementations
+# ----------------------------------------------------------------------------------------------------------------------
 
-
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-    train_dataset = datasets.ImageFolder(
-        data_dir,
-        transforms.Compose([
-            transforms.Resize(256),
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-
-    print(len(train_dataset))
-    if dataset_size < len(train_dataset):
-        indices = list(range(dataset_size))
-        train_sampler = SequentialSampler(indices)
-    else:
-        train_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=(train_sampler is None),
-        num_workers=num_workers, pin_memory=pin_memory, sampler=train_sampler)
-
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(data_dir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=batch_size, shuffle=False,
-        num_workers=num_workers, pin_memory=pin_memory)
-
-    if show_sample:
-        sample_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=9, shuffle=shuffle,
-            num_workers=num_workers, pin_memory=pin_memory,
+class CIFAR10(ClassificationDataset):
+    def __init__(self):
+        super().__init__(
+            class_labels=['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship',
+                          'truck'],
+            shape=(3, 32, 32),
+            testset_size=10000,
+            trainset_size=50000,
+            dataset_space=170500096,
+            expected_files='cifar-10-python.tar.gz'
         )
-        data_iter = iter(sample_loader)
-        images, labels = data_iter.next()
-        X = images.numpy().transpose([0, 2, 3, 1])
-        plot_images(X, labels, IMAGE_NETLABEL_NAMES)
+
+    def _train_importer(self, augment):
+        ops = [transforms.ToTensor(), transforms.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010))]
+        if augment:
+            ops.insert(0, transforms.RandomCrop(32, padding=4))
+            ops.insert(0, transforms.RandomHorizontalFlip())
+        return datasets.CIFAR10(root=self._data_dir, train=True, download=self._download,
+                                transform=transforms.Compose(ops))
+
+    def _test_importer(self):
+        ops = [transforms.ToTensor(), transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
+        return datasets.CIFAR10(root=self._data_dir, train=False, download=self._download,
+                                transform=transforms.Compose(ops))
 
 
-    return train_loader, val_loader, IMAGE_NETLABEL_NAMES
+class MNIST(ClassificationDataset):
+    def __init__(self):
+        super().__init__(class_labels=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
+                         shape=(1, 28, 28), testset_size=10000, trainset_size=60000, dataset_space=55443456,
+                         expected_files=[os.path.join('processed', 'training.pt'),
+                                         os.path.join('processed', 'test.pt')])
 
-def ImageNet_test():
-    pass
+    def _train_importer(self, augment):  # Convert 1 channels -> 3 channels #transforms.Grayscale(3),
+        ops = [transforms.ToTensor(),
+               transforms.Normalize(mean=(0.1307,), std=(0.3081,))]
+        return datasets.MNIST(root=self._data_dir, train=True, download=self._download,
+                              transform=transforms.Compose(ops))
+
+    def _test_importer(self):  # Convert 1 channels -> 3 channels
+        ops = [transforms.ToTensor(),
+               transforms.Normalize(mean=(0.1307,), std=(0.3081,))]
+        return datasets.MNIST(root=self._data_dir, train=False, download=self._download,
+                              transform=transforms.Compose(ops))
+
+
+class STL10(ClassificationDataset):
+    def __init__(self):
+        super().__init__(
+            class_labels=['airplane', 'bird', 'car', 'cat', 'deer', 'dog', 'horse', 'monkey', 'ship', 'truck'],
+            shape=(3, 96, 96), testset_size=8000, trainset_size=5000, dataset_space=2640400384,
+            expected_files='stl10_binary.tar.gz')
+
+    def _train_importer(self, augment):
+        ops = [transforms.ToTensor()]
+        return datasets.STL10(root=self._data_dir, split='train', download=self._download,
+                              transform=transforms.Compose(ops))
+
+    def _test_importer(self):
+        ops = [transforms.ToTensor()]
+        return datasets.STL10(root=self._data_dir, split='test', download=self._download,
+                              transform=transforms.Compose(ops))
+
+
+class ImageNet(ClassificationDataset):
+    def __init__(self):
+        super().__init__(
+            class_labels=IMAGE_NETLABEL_NAMES,
+            shape=(3, 256, 256), testset_size=14197122, trainset_size=0, dataset_space=0,
+            expected_files=['train', 'test'])
+
+    def _train_importer(self, augment):
+        ops = [transforms.ToTensor(), transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
+        if augment:
+            ops.insert(0, transforms.RandomSizedCrop(224))
+            ops.insert(0, transforms.RandomHorizontalFlip())
+
+        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'train'), transform=transforms.Compose(ops))
+
+    def _test_importer(self):
+        ops = [transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(),
+               transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
+        # TODO - what happens if folder is empty ?
+        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'test'), transform=transforms.Compose(ops))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-#                                               	 Torch - CIFAR10
+#                                                  Implementations
 # ----------------------------------------------------------------------------------------------------------------------
-def CIFAR10_shape():
-    return (3, 32, 32)
+class Datasets:
+    _implemented = {
+        'MNIST': MNIST,
+        'CIFAR10': CIFAR10,
+        'ImageNet': ImageNet,
+        'STL10': STL10
+    }
 
+    @staticmethod
+    def which():
+        return tuple(Datasets._implemented.keys())
 
-def CIFAR10_train(batch_size,
-                  dataset_size=50000,
-                  data_dir='./data',
-                  augment=True,
-                  random_seed=None,
-                  valid_size=0.1,
-                  shuffle=True,
-                  show_sample=False,
-                  num_workers=1,
-                  pin_memory=True,
-                  download=False):
-    """
-    Utility function for loading and returning train and valid
-    multi-process iterators over the CIFAR-10 dataset. A sample
-    9x9 grid of the images can be optionally displayed.
-    If using CUDA, num_workers should be set to 1 and pin_memory to True.
-    Params
-    ------
-    - batch_size: how many samples per batch to load.
-    - dataset_size: how many samples to use out of the 50000.
-    - data_dir: path directory to the dataset.
-    - augment: whether to apply the data augmentation scheme
-      mentioned in the paper. Only applied on the train split.
-    - random_seed: fix seed for reproducibility.
-    - valid_size: percentage split of the training set used for
-      the validation set. Should be a float in the range [0, 1].
-    - shuffle: whether to shuffle the train/validation indices.
-    - show_sample: plot 9x9 sample grid of the dataset.
-    - num_workers: number of subprocesses to use when loading the dataset.
-    - pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
-      True if using GPU.
-    Returns
-    -------
-    - train_loader: training set iterator.
-    - valid_loader: validation set iterator.
-    - label_names: a list with all label names by order
-    """
-    assert ((valid_size >= 0) and (valid_size <= 1)), "[!] valid_size should be in the range [0, 1]."
-    label_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-
-    normalize = transforms.Normalize(
-        mean=[0.4914, 0.4822, 0.4465],
-        std=[0.2023, 0.1994, 0.2010],
-    )
-
-    # define transforms
-    valid_transform = transforms.Compose([
-        transforms.ToTensor(),
-        normalize,
-    ])
-    if augment:
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    else:
-        train_transform = transforms.Compose([
-            transforms.ToTensor(),
-            normalize,
-        ])
-
-    # load the dataset
-    train_dataset = datasets.CIFAR10(
-        root=data_dir, train=True,
-        download=download, transform=train_transform,
-    )
-
-    valid_dataset = datasets.CIFAR10(
-        root=data_dir, train=True,
-        download=download, transform=valid_transform,
-    )
-
-    # Randomize all 50000 indices
-    indices = list(range(len(train_dataset)))
-    if shuffle:
-        if random_seed is not None:
-            np.random.seed(random_seed)
-        np.random.shuffle(indices)
-
-    # Now truncate to the required size
-    num_train = min(len(train_dataset), dataset_size)
-    indices = indices[:num_train]
-
-    # Split validation
-    split = int(np.floor(valid_size * num_train))
-
-    train_idx, valid_idx = indices[split:], indices[:split]
-    train_sampler = SubsetRandomSampler(train_idx)
-    valid_sampler = SubsetRandomSampler(valid_idx)
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, sampler=train_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset, batch_size=batch_size, sampler=valid_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-
-    # visualize some images
-    if show_sample:
-        sample_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=9, shuffle=shuffle,
-            num_workers=num_workers, pin_memory=pin_memory,
-        )
-        data_iter = iter(sample_loader)
-        images, labels = data_iter.next()
-        X = images.numpy().transpose([0, 2, 3, 1])
-        plot_images(X, labels, label_names)
-
-    return train_loader, valid_loader, label_names
-
-
-def CIFAR10_test(batch_size, max_dataset_size=10000,
-                 data_dir='./data',
-                 num_workers=1,
-                 pin_memory=True,
-                 download=False):
-    """
-    Utility function for loading and returning a multi-process
-    test iterator over the CIFAR-10 dataset.
-    If using CUDA, num_workers should be set to 1 and pin_memory to True.
-    Params
-    ------
-    - data_dir: path directory to the dataset.
-    - batch_size: how many samples per batch to load.
-    - shuffle: whether to shuffle the dataset after every epoch.
-    - num_workers: number of subprocesses to use when loading the dataset.
-    - pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
-      True if using GPU.
-    Returns
-    -------
-    - test_loader: test set iterator.
-    """
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225],
-    )
-
-    # define transform
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        normalize,
-    ])
-
-    test_dataset = datasets.CIFAR10(
-        root=data_dir, train=False,
-        download=download, transform=transform,
-    )
-
-    # Looking at test_dataset - it is already shuffled. We will only truncate it:
-    if max_dataset_size < len(test_dataset):
-        indices = list(range(max_dataset_size))
-        test_sampler = SequentialSampler(indices)
-    else:
-        test_sampler = None
-
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=batch_size, sampler=test_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-
-    return test_loader
+    @staticmethod
+    def get(dataset_name):
+        return Datasets._implemented[dataset_name]()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               	General
 # ----------------------------------------------------------------------------------------------------------------------
-def plot_images(images, cls_true, label_names, cls_pred=None):
+def convert_bytes(num):
     """
-    Adapted from https://github.com/Hvass-Labs/TensorFlow-Tutorials/
+    this function will convert bytes to MB.... GB... etc
     """
-    fig, axes = plt.subplots(3, 3)
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f %s" % (num, x)
+        num /= 1024.0
+
+
+def plot_images(images, cls_true, label_names, cls_pred=None, siz=3):
+    # Adapted from https://github.com/Hvass-Labs/TensorFlow-Tutorials/
+    fig, axes = plt.subplots(siz, siz)
 
     for i, ax in enumerate(axes.flat):
         # plot img
-        ax.imshow(images[i, :, :, :], interpolation='spline16')
+        ax.imshow(images[i, :, :, :].squeeze(), interpolation='spline16')
 
         # show true & predicted classes
         cls_true_name = label_names[cls_true[i]]
         if cls_pred is None:
-            xlabel = "{0} ({1})".format(cls_true_name, cls_true[i])
+            xlabel = f"{cls_true_name} ({cls_true[i]})"
         else:
             cls_pred_name = label_names[cls_pred[i]]
-            xlabel = "True: {0}\nPred: {1}".format(
-                cls_true_name, cls_pred_name
-            )
+            xlabel = f"True: {cls_true_name}\nPred: {cls_pred_name}"
         ax.set_xlabel(xlabel)
         ax.set_xticks([])
         ax.set_yticks([])
@@ -281,26 +287,9 @@ def plot_images(images, cls_true, label_names, cls_pred=None):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-#                                               	Misc
+#                                               	Dataset Collaterals
 # ----------------------------------------------------------------------------------------------------------------------
-def maybe_download(filename, url, expected_bytes):
-    """Download a file if not present, and make sure it's the right size."""
-    # Usage :
-    #   url = 'http://mattmahoney.net/dc/'
-    #   filename = maybe_download('text8.zip', url, 31344016)
-    if not os.path.exists(filename):
-        filename, _ = urllib.request.urlretrieve(url + filename, filename)
-    statinfo = os.stat(filename)
-    if statinfo.st_size == expected_bytes:
-        print('Found and verified', filename)
-    else:
-        print(statinfo.st_size)
-        raise Exception(
-            'Failed to verify ' + filename + '. Can you get to it with a browser?')
-    return filename
-
-
-IMAGE_NETLABEL_NAMES = ['kit_fox', 'english_setter', 'siberian_husky', 'australian_terrier',
+IMAGE_NETLABEL_NAMES = ('kit_fox', 'english_setter', 'siberian_husky', 'australian_terrier',
                         'english_springer', 'grey_whale', 'lesser_panda', 'egyptian_cat', 'ibex',
                         'persian_cat', 'cougar', 'gazelle', 'porcupine', 'sea_lion', 'malamute',
                         'badger', 'great_dane', 'walker_hound', 'welsh_springer_spaniel', 'whippet',
@@ -481,4 +470,4 @@ IMAGE_NETLABEL_NAMES = ['kit_fox', 'english_setter', 'siberian_husky', 'australi
                         'ipod', 'bolete', 'scuba_diver', 'pitcher', 'matchstick', 'bikini', 'sock',
                         'cd_player', 'lens_cap', 'thatch', 'vault', 'beaker', 'bubble', 'cheeseburger',
                         'parallel_bars', 'flagpole', 'coffee_mug', 'rubber_eraser', 'stole',
-                        'carbonara', 'dumbbell']
+                        'carbonara', 'dumbbell')

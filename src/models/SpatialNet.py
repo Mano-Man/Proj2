@@ -27,6 +27,7 @@ class Spatial(nn.Module):
         self.padded_in_shape, self.use_cuda, self.pad_s = (None, None, None)
         self.conv_filt, self.batch_mask = (None, None)
 
+
     def init_to_input(self, p_size, batch_size, in_shape, padded_in_shape, use_cuda):
 
         self.p_size, self.batch_size, self.in_shape, self.padded_in_shape, self.use_cuda = \
@@ -74,7 +75,7 @@ class Spatial(nn.Module):
             x = torch.nn.functional.pad(x, (0, self.pad_s, 0, self.pad_s), value=0)  # Pad with ZEROS
 
         if x.size(0) != self.batch_size:
-            print('Batch size event')  # - Will happen once every test forward
+            #print('Batch size event')  # - Will happen once every test forward
             batch_mask = self.batch_mask[:x.size(0), :, :, :]
         else:
             batch_mask = self.batch_mask
@@ -122,6 +123,9 @@ class SpatialNet(PytorchNet):
         for sp in self.spatial_layers:
             sp.reset_ops()
 
+    def name(self):
+        return self.__class__.__name__
+
     def num_ops(self):
         ops_saved = 0
         total_ops = 0
@@ -138,17 +142,24 @@ class SpatialNet(PytorchNet):
                 print(f'Spatial Layer {i}: Ops saved: {l.ops_saved}/{l.total_ops}')
             else:
                 spacer = ' ' * (len(str(len(self.spatial_layers))) - len(str(i)))
+                assert(l.ops_saved <= all_ops_saved)
+                if all_ops_saved ==0: # Handle div by 0 case
+                    midstr = '0'
+                else:
+                    midstr = f'{l.ops_saved*100/all_ops_saved:.3f}'
                 print(
                     f'Spatial Layer {i}:{spacer} Ops saved: {l.ops_saved*100 /l.total_ops:.3f} % [{int(l.ops_saved)} / {l.total_ops}]',
-                    f'of [{l.ops_saved*100/all_ops_saved:.3f} % / {l.total_ops*100/all_total_ops:.3f} %]')
+                    f'of [{midstr} % / {l.total_ops*100/all_total_ops:.3f} %]')
 
         if all_total_ops > 0:
-            print(f'Grand total: {all_ops_saved}/{all_total_ops:.3f} {all_ops_saved*100/all_total_ops:.3f} %')
+            print(f'Grand total: {all_ops_saved}/{all_total_ops} {all_ops_saved*100/all_total_ops:.3f} %')
         else:
-            print(f'Grand total: {all_ops_saved}/{all_total_ops:.3f}')
+            print(f'Grand total: {all_ops_saved}/{all_total_ops}')
 
-    def initialize_spatial_layers(self, x_shape, batch_size, p_size):
+    def initialize_spatial_layers(self, x_shape, batch_size, p_size,freeze=True):
 
+        if freeze:
+            self.eval() #LOCK Network for testing only
         # From init phase and on, set the spatial sizes
         self.x_shape = x_shape
         self.p_size = p_size
@@ -242,16 +253,27 @@ class SpatialNet(PytorchNet):
                 self.enable_spatial_layers(enabled)
                 return summary
 
-    def output_size(self, x_shape):
+    def output_size(self, x_shape,cuda_allowed=False):
 
         if self.sp is None:
-            return super().output_size(x_shape)
+            return super().output_size(x_shape,cuda_allowed)
         else:
             enabled = self.enabled_layers()
             if not enabled:
-                return super().output_size(x_shape)
+                return super().output_size(x_shape,cuda_allowed)
             else:
                 self.disable_spatial_layers(enabled)
-                siz = super().output_size(x_shape)
+                siz = super().output_size(x_shape,cuda_allowed)
                 self.enable_spatial_layers(enabled)
                 return siz
+
+
+
+def sequential_spatial_layer_extract(seq_model):
+    spatial_layers = []
+    for idx, m in enumerate(seq_model.modules()):
+        #print(idx, '->', m)
+        if isinstance(m,Spatial):
+            spatial_layers.append(m)
+    return spatial_layers
+

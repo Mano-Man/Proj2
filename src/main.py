@@ -27,6 +27,7 @@ ACC_LOSS = 2
 ACC_LOSS_OPTS = [0, 1, 3, 5, 10]
 
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                       Optimization Workloads
 # ----------------------------------------------------------------------------------------------------------------------
@@ -89,6 +90,7 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
+
 def training():
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
     nn.summary(dat.shape())
@@ -123,6 +125,97 @@ def debug_layer_q():
         plt.ylabel('ops diff')
         print('debuging...')
         plt.savefig(f'{cfg.RESULTS_DIR}debug_{regex}.pdf')
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                   Tutorials
+# ----------------------------------------------------------------------------------------------------------------------
+
+def info_tutorial():
+    nn = NeuralNet()
+    x_shape = dat.shape()
+    test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
+    nn.test(test_gen, print_it=True)
+    nn.net.initialize_spatial_layers(x_shape, cfg.BATCH_SIZE, PATCH_SIZE)
+    nn.summary(x_shape, print_it=True)
+    nn.print_weights()
+    print(nn.output_size(x_shape))
+
+    # Spatial Operations, defined one the net itself. Remember that after enabling a layer, ops are affected
+    assert nn.net.num_spatial_layers() != 0
+    nn.net.print_spatial_status()
+    nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
+    nn.net.print_ops_summary()
+    print(nn.net.num_ops())  # (ops_saved, total_ops)
+
+    # Given x, we generate all spatial layer requirement sizes:
+    spat_sizes = nn.net.generate_spatial_sizes(x_shape)
+    print(spat_sizes)
+    p_spat_sizes = nn.net.generate_padded_spatial_sizes(x_shape, PATCH_SIZE)
+    print(p_spat_sizes)
+
+    # Generate a constant 1 value mask over all spatial nets
+    print(nn.net.enabled_layers())
+    nn.net.fill_masks_to_val(0)
+    print(nn.net.enabled_layers())
+    print(nn.net.disabled_layers())
+    nn.net.print_spatial_status()  # Now all are enabled, seeing the mask was set
+    nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see all layers enabled performance
+    nn.net.print_ops_summary()
+    nn.net.reset_spatial()  # Disables layers as well
+    nn.net.print_ops_summary()
+    # Turns on 3 ids and turns off all others
+    chosen_victims = random.sample(range(nn.net.num_spatial_layers()), 4)
+    nn.net.strict_mask_update(update_ids=chosen_victims[0:3],
+                              masks=[torch.zeros(p_spat_sizes[chosen_victims[0]]), torch.zeros(p_spat_sizes[chosen_victims[1]]),
+                                     torch.zeros(p_spat_sizes[chosen_victims[2]])])
+
+    # Turns on one additional id and *does not* turn off all others
+    nn.net.lazy_mask_update(update_ids=[chosen_victims[3]], masks=[torch.zeros(p_spat_sizes[chosen_victims[3]])])
+    nn.net.print_spatial_status()  #
+    print(nn.net.enabled_layers())
+    nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Run with 4 layers on
+    nn.net.print_ops_summary()
+
+
+def data_tutorial():
+    dat.data_summary()
+    print(dat.name())
+    print(dat.num_classes())
+    print(dat.input_channels())
+    print(dat.class_labels())
+    print(dat.max_test_size())
+    print(dat.max_train_size())
+    print(dat.shape())
+    (train_loader, num_train), (valid_loader, num_valid) = dat.trainset(batch_size=cfg.BATCH_SIZE,
+                                                                        max_samples=dat.max_train_size(),
+                                                                        show_sample=True)
+    test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                   Debug Mains
+# ----------------------------------------------------------------------------------------------------------------------
+
+def debug():
+    nn1 = NeuralNet()
+    nn2 = NeuralNet()
+    nn3 = NeuralNet()
+    test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
+
+    # Test One:
+    nn1.test(test_gen, print_it=True)
+    nn1.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
+    nn1.test(test_gen, print_it=True)
+
+    # Test Two:
+    nn2.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
+    nn2.test(test_gen, print_it=True)
+
+    # Test One:
+    nn3.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE,freeze=False)
+    nn3.test(test_gen, print_it=True)
+
 
 
 # ----------------------------------------------------------------------------------------------------------------------

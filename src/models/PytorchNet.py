@@ -119,9 +119,9 @@ class PytorchNet(nn.Module):
             print("----------------------------------------------------------------")
         return summary
 
-    def output_size(self, x_shape):
+    def output_size(self, x_shape,cuda_allowed=True):
         t = torch.Tensor(1, *x_shape)
-        if self.use_cuda:
+        if self.use_cuda and cuda_allowed:
             t = t.cuda()
         f = self.forward(torch.autograd.Variable(t))
         return int(np.prod(f.size()[1:]))

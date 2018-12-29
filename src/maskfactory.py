@@ -83,6 +83,7 @@ def get_specific_mask(dims, channel, patch, pattern, new_patch_size, mode, mask_
         return mask[:, 0:(orig_patch_n * patch_size), 0:(orig_patch_m * patch_size)]
 
 
+
 def gen_masks_with_resume(patch_size, patterns, mode, gran_thresh, layer_layout, resume_params=[0, 0, 0, 0],
                           mask_type=np.float32):
     for layer in range(resume_params[0], len(layer_layout)):
