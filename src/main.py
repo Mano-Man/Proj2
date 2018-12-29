@@ -121,6 +121,6 @@ if __name__ == '__main__':
     run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=[3.5])
     run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=[3.5])
     debug()
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, cfg.DATA_NAME, 2, (1,3),
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
                                    10, [0, 1, 2, 3, 3.5, 5, 10], 93.5)
     #main_plot_ops_saved_vs_ones(Mode.UNIFORM_LAYER)
