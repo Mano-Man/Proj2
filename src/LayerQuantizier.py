@@ -9,7 +9,9 @@ import torch
 
 from Record import Mode, FinalResultRc, load_from_file, save_to_file
 import Config as cfg
+from Config import DATA as dat
 import maskfactory as mf
+
 
 class LayerQuantResumeRec():
     def __init__(self,no_of_layers, input_length, max_acc_loss, inp):
@@ -46,7 +48,7 @@ class LayerQuantResumeRec():
             if idx==(clean_input_length[layer]-1):
                 self.is_final[layer] = True
         self.reset_occured = True
-                
+
     def should_reset(self):
         return self.is_final==[True]*len(self.is_final)
     
@@ -58,7 +60,7 @@ class LayerQuantResumeRec():
     
     def is_finised(self):
         return self.should_reset() and self.reset_occured
-    
+
     def mock_reset(self):
         self.reset_occured = True
         
@@ -91,15 +93,16 @@ class LayerQuantizier():
         
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
-        elif rec.mode == Mode.UNIFORM_LAYER: 
-            self.default_in_pattern = np.ones((self.input_patterns.shape[0],self.input_patterns.shape[0]), dtype=self.input_patterns.dtype)
+        elif rec.mode == Mode.UNIFORM_LAYER:
+            self.default_in_pattern = np.ones((self.input_patterns.shape[0], self.input_patterns.shape[0]),
+                                              dtype=self.input_patterns.dtype)
         elif rec.mode == Mode.UNIFORM_FILTERS:
-            self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0][0].dtype)
+            self.default_in_pattern = np.ones((1, 1), dtype=self.input_patterns[0][0][0].dtype)
         else:
-            self.default_in_pattern = np.ones((1,1), dtype=self.input_patterns[0][0].dtype)
-            
-        self.resume_param_filename = 'LayerQ_ma'+ str(max_acc_loss) + '_' + rec.filename
-        
+            self.default_in_pattern = np.ones((1, 1), dtype=self.input_patterns[0][0].dtype)
+
+        self.resume_param_filename = 'LayerQ_ma' + str(max_acc_loss) + '_' + rec.filename
+
         if resume_param_path is None:
             input_length = [len(self.input[layer]) for layer in range(len(self.input))]
             self.resume_rec = LayerQuantResumeRec(len(self.input), input_length, max_acc_loss, self.input)
@@ -110,11 +113,11 @@ class LayerQuantizier():
     def number_of_iters(self):
         no_of_patterns = [len(self.input[l_idx]) for l_idx in range(len(self.input))]
         return sum(no_of_patterns)
-        
+
     def simulate(self, nn, test_gen):
         print('==> starting LayerQuantizier simulation.')
 
-        self.sp_list = [None]*len(self.input)
+        self.sp_list = [None] * len(self.input)
         for l_idx, p_idx in enumerate(self.resume_rec.resume_index):
             self._update_layer( l_idx, p_idx)
                 
@@ -123,26 +126,26 @@ class LayerQuantizier():
         ops_saved, ops_total = nn.net.num_ops()
         nn.net.reset_ops()
         self.save_state(test_acc, ops_saved, ops_total)
-        
+
         counter = 1
         l_to_inc = self._get_next_opt()
-        while(l_to_inc is not None):
+        while (l_to_inc is not None):
             self._update_layer(l_to_inc, self.resume_rec.resume_index[l_to_inc])
-                
+
             nn.net.lazy_mask_update(update_ids=[l_to_inc], masks=[self.sp_list[l_to_inc]])
             _, test_acc, _ = nn.test(test_gen)
             ops_saved, ops_total = nn.net.num_ops()
             nn.net.reset_ops()
-            self.save_state(test_acc,ops_saved, ops_total)
+            self.save_state(test_acc, ops_saved, ops_total)
             l_to_inc = self._get_next_opt()
             counter += 1
 
         self._save_final_rec()
         print(f'==> finised LayerQuantizier simulation')
-        
+
     def is_finised(self):
-        return self.resume_rec.is_finised()                
-    
+        return self.resume_rec.is_finised()
+
     def save_state(self, test_acc, ops_saved, ops_total):
         self.resume_rec.add_rec(test_acc, ops_saved)
         if test_acc >=  self.min_acc and ops_saved > self.resume_rec.curr_saved_ops:
@@ -152,22 +155,24 @@ class LayerQuantizier():
             self.resume_rec.curr_best_mask = [self.sp_list[l].clone() for l in range(len(self.sp_list))]
             self.resume_rec.curr_resume_index = self.resume_rec.resume_index.copy()
         save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
-        
+
     def max_number_of_iters(self, mock_input):
         input_length = [len(mock_input[layer]) for layer in range(len(mock_input))]
         return sum(input_length)
-        
+
     def _update_layer(self, l_idx, p_idx):
         opt = self.input[l_idx][p_idx]
         if opt[0] == -1:
             self.sp_list[l_idx] = torch.from_numpy(mf.tile_opt(self.layers_layout[l_idx], self.default_in_pattern))
         elif self.mode == Mode.UNIFORM_LAYER:
-            self.sp_list[l_idx] = torch.from_numpy(mf.tile_opt(self.layers_layout[l_idx], self.input_patterns[:,:,opt[0]]))
+            self.sp_list[l_idx] = torch.from_numpy(
+                mf.tile_opt(self.layers_layout[l_idx], self.input_patterns[:, :, opt[0]]))
         elif self.mode == Mode.UNIFORM_FILTERS:
-            self.sp_list[l_idx] = torch.from_numpy(mf.tile_opt(self.layers_layout[l_idx],self.input_patterns[l_idx][0][opt[0]]))
-        else: 
+            self.sp_list[l_idx] = torch.from_numpy(
+                mf.tile_opt(self.layers_layout[l_idx], self.input_patterns[l_idx][0][opt[0]]))
+        else:
             self.sp_list[l_idx] = torch.from_numpy(self.input_patterns[l_idx][opt[0]])
-    
+
     def _save_final_rec(self):
         if self.resume_rec.curr_tot_ops == 0:
             print(f'==> No suitable Option was found for min accuracy of {self.min_acc}')
@@ -181,7 +186,7 @@ class LayerQuantizier():
         self.resume_rec.mark_finished(mark_all=True)
         save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
         return f_rec
-        
+
     def _get_next_opt(self):
         possible_layers = []
         for layer,opt_idx in enumerate(self.resume_rec.resume_index):
@@ -208,13 +213,13 @@ class LayerQuantizier():
         if l_to_inc is not None:
             self.resume_rec.resume_index[l_to_inc] = self.resume_rec.resume_index[l_to_inc]+1
         return l_to_inc
-        
+
     def _clean_input(self):
         for l in range(len(self.input)):
             self.curr_acc_th = 0
             self.input[l][:] = [tup for tup in self.input[l] if self._determine(tup)]
         del self.curr_acc_th
-    
+
     def _determine(self, tup):
         p_idx, ops_saved, acc = tup
         if ops_saved == 0 and p_idx != -1:
@@ -224,6 +229,3 @@ class LayerQuantizier():
         else:
             self.curr_acc_th = acc
         return True
-    
-
-        

@@ -10,7 +10,7 @@ import random
 from tqdm import tqdm
 import time
 
-#from util.data_import import CIFAR10_Test, CIFAR10_shape
+# from util.data_import import CIFAR10_Test, CIFAR10_shape
 from RecordFinder import RecordFinder
 from NeuralNet import NeuralNet
 from Record import Mode, Modes, Record, RecordType, BaselineResultRc, load_from_file, save_to_file
@@ -19,7 +19,7 @@ from ChannelQuantizier import ChannelQuantizier
 from LayerQuantizier import LayerQuantizier
 import maskfactory as mf
 import Config as cfg
-
+from Config import DATA as dat
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -27,7 +27,8 @@ import Config as cfg
 class Optimizer:
     def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc=None, test_size=cfg.TEST_SET_SIZE):
         self.nn = NeuralNet()
-        self.test_gen = cfg.TEST_GEN(batch_size=cfg.BATCH_SIZE, max_dataset_size=test_size, download=cfg.DO_DOWNLOAD)
+
+        self.test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
         self.test_set_size = cfg.TEST_SET_SIZE
         if init_acc is None:
             _, test_acc, correct = self.nn.test(self.test_gen)
@@ -35,7 +36,8 @@ class Optimizer:
             self.init_acc = test_acc  # TODO - Fix initialize bug 
         else:
             self.init_acc = init_acc
-        self.record_finder = RecordFinder(cfg.NET.__name__, cfg.DATA_NAME ,patch_size, ones_range, gran_thresh, max_acc_loss, self.init_acc)
+        self.record_finder = RecordFinder(cfg.NET.__name__, dat.name(), patch_size, ones_range, gran_thresh,
+                                          max_acc_loss, self.init_acc)
         self.ps = patch_size
         self.max_acc_loss = max_acc_loss
         self.gran_thresh = gran_thresh
@@ -79,7 +81,7 @@ class Optimizer:
         
 
     def base_line_result(self):
-        layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
+        layers_layout = self.nn.net.generate_spatial_sizes(dat.shape())
         self._init_nn()
 
         sp_list = [None] * len(layers_layout)
@@ -89,7 +91,8 @@ class Optimizer:
 
         _, test_acc, _ = self.nn.test(self.test_gen)
         ops_saved, ops_total = self.nn.net.num_ops()
-        bl_rec = BaselineResultRc(self.init_acc, test_acc, ops_saved, ops_total, self.ps, cfg.NET.__name__, cfg.DATA_NAME)
+        bl_rec = BaselineResultRc(self.init_acc, test_acc, ops_saved, ops_total, self.ps, cfg.NET.__name__,
+                                  dat.name())
         print(bl_rec)
         save_to_file(bl_rec, True, cfg.RESULTS_DIR)
 
@@ -104,7 +107,7 @@ class Optimizer:
             if q_rec_fn is None:
                 quantizier = Quantizier(in_rec, self.init_acc, self.max_acc_loss, self.ps)
             else:
-                quantizier = Quantizier(in_rec, self.init_acc, self.max_acc_loss, self.ps, 
+                quantizier = Quantizier(in_rec, self.init_acc, self.max_acc_loss, self.ps,
                                         load_from_file(q_rec_fn, ''))
         if not quantizier.is_finised():
             self._init_nn()
@@ -112,19 +115,19 @@ class Optimizer:
         if RecordType.lQ_RESUME == rec_type:
             return
         return quantizier.output_rec
-    
+
     def run_mode(self, mode=None):
-        if Mode.MAX_GRANULARITY==mode:
+        if Mode.MAX_GRANULARITY == mode:
             self.by_max_granularity()
-        elif Mode.UNIFORM_FILTERS==mode:
+        elif Mode.UNIFORM_FILTERS == mode:
             self.by_uniform_filters()
-        elif Mode.UNIFORM_LAYER==mode:
+        elif Mode.UNIFORM_LAYER == mode:
             self.by_uniform_layers()
-        elif Mode.UNIFORM_PATCH==mode:
+        elif Mode.UNIFORM_PATCH == mode:
             self.by_uniform_patches()
         else:
             self.run_all_modes()
-    
+
     def run_all_modes(self):
         self.by_uniform_layers()
         self.by_uniform_filters()
@@ -154,12 +157,12 @@ class Optimizer:
         cQ_rec = self._quantizier_main(RecordType.cQ_REC, pQ_rec)
         self._quantizier_main(RecordType.lQ_RESUME, cQ_rec)
         self.record_finder.print_result(Mode.MAX_GRANULARITY)
-    
-    def print_runtime_eval(self):        
+
+    def print_runtime_eval(self):
         print(f"================================================================")
         print(f"----------------------------------------------------------------")
         print(f"                      NET: {cfg.NET.__name__}")
-        print(f"                  DATASET: {cfg.DATA_NAME}")
+        print(f"                  DATASET: {dat.name()}")
         print(f"               PATCH SIZE: {self.ps}")
         print(f"                     ONES: {self.ones_range[0]}-{self.ones_range[1]-1}")
         print(f"              GRANULARITY: {self.gran_thresh}")
@@ -169,7 +172,8 @@ class Optimizer:
         print(f"----------------------------------------------------------------")
         for mode in Modes:
             no_of_runs, run_times = self.eval_run_time(mode)
-            total_run_time = (no_of_runs[0] * run_times[0] + no_of_runs[1] * run_times[0] + no_of_runs[2] * run_times[1]) / (60 * 60)
+            total_run_time = (no_of_runs[0] * run_times[0] + no_of_runs[1] * run_times[0] + no_of_runs[2] * run_times[
+                1]) / (60 * 60)
             if total_run_time > 24:
                 total_run_time = round(total_run_time / 24, 2)
                 total_run_time_units = 'days'
@@ -186,12 +190,12 @@ class Optimizer:
             print(f"\nsec per iter    ")
             print(f"        1st/2nd lvl: {run_times[0]}")
             print(f"        lQ: {run_times[1]}")
-    
+
             print(f"----------------------------------------------------------------")
         print(f"================================================================")
 
     def eval_run_time(self, mode, no_of_tries=5):
-        layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
+        layers_layout = self.nn.net.generate_spatial_sizes(dat.shape())
         recs_first_lvl = Record(layers_layout, self.gran_thresh, True, mode, self.init_acc, self.ps, self.ones_range)
         first_lvl_runs = recs_first_lvl.size
 
@@ -279,7 +283,7 @@ class Optimizer:
             if st_point is None:
                 return rcs
 
-        layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
+        layers_layout = self.nn.net.generate_spatial_sizes(dat.shape())
         self._init_nn()
 
         if rec_filename is None:
@@ -309,13 +313,10 @@ class Optimizer:
 
     def _init_nn(self):
         # TODO - Remove this
-        self.nn.net.disable_spatial_layers(list(range(len(self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())))))
+        self.nn.net.disable_spatial_layers(list(range(len(self.nn.net.generate_spatial_sizes(dat.shape())))))
         # TODO  move this to __init__ if this function is removed
-        self.nn.net.initialize_spatial_layers(cfg.DATA_SHAPE(), cfg.BATCH_SIZE, self.ps)
+        self.nn.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, self.ps)
         _, test_acc, correct = self.nn.test(self.test_gen)
         print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
         self.nn.net.reset_spatial()
         assert test_acc == self.init_acc, f'starting accuracy does not match! curr_acc:{test_acc}, prev_acc{self.init_acc}'
-
-
-

@@ -16,7 +16,7 @@ import maskfactory as mf
 
 
 class ChannelQuantizier():
-    def __init__(self, rec, init_acc, max_acc_loss, patch_size, out_rec=None,  default_in_pattern=None):
+    def __init__(self, rec, init_acc, max_acc_loss, patch_size, out_rec=None, default_in_pattern=None):
         self.patch_size = patch_size
         self.input_patterns = rec.all_patterns
         self.input = rec.gen_pattern_lists(init_acc - max_acc_loss)
@@ -56,7 +56,7 @@ class ChannelQuantizier():
                 if save_counter > cfg.SAVE_INTERVAL:
                     self.save_state()
                     save_counter = 0
-        
+
         self.save_state()
         print('==> finised ChannelQuantizier simulation.')
 
@@ -67,17 +67,17 @@ class ChannelQuantizier():
         save_to_file(self.output_rec, True, cfg.RESULTS_DIR)
 
     def _generate_patterns(self, mode, layers_layout, gran_thresh, rec_in_filename, max_acc_loss, init_acc):
-        #TODO - fix Record init   
+        # TODO - fix Record init
         self.output_rec = Record(layers_layout, gran_thresh, False, mode, init_acc)
         self.output_rec.set_results_dimensions(no_of_layers=len(self.input),
-                                               no_of_channels=[1]*len(self.input),
-                                               no_of_patches=[1]*len(self.input))
-        
+                                               no_of_channels=[1] * len(self.input),
+                                               no_of_patches=[1] * len(self.input))
+
         no_of_patterns_gen, all_patterns = self._gen_patterns_zip_longest(mode, layers_layout)
         self.output_rec.set_all_patterns(all_patterns, RecordType.cQ_REC)
         self.output_rec.set_results_dimensions(no_of_patterns=no_of_patterns_gen)
-        
-        self.output_rec.set_filename('ChannelQ_ma'+ str(max_acc_loss) + '_' + rec_in_filename)
+
+        self.output_rec.set_filename('ChannelQ_ma' + str(max_acc_loss) + '_' + rec_in_filename)
 
     def _gen_patterns_zip_longest(self, mode, layers_layout):
         all_patterns = []

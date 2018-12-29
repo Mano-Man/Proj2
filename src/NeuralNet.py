@@ -3,6 +3,7 @@ import torch
 import torch.nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # Utils:
 import re
@@ -13,13 +14,15 @@ import math
 
 from util.gen import Progbar, banner
 import Config as cfg
+from Config import DATA as dat
+from Config import NET as net
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
 class NeuralNet:
-    def __init__(self):
+    def __init__(self, resume=True):
 
         # Decide on device:
         if torch.cuda.is_available():
@@ -28,22 +31,23 @@ class NeuralNet:
             if torch.cuda.device_count() > 1:
                 raise AssertionError
                 # This line enables multiple GPUs, but changes the layer names a bit
-                # self.net = torch.nn.DataParallel(self.net)  # Useful if you have multiple GPUs - does not hurt otherwise
+                # self.net = torch.nn.DataParallel(self.net)
+                #  Useful if you have multiple GPUs - does not hurt otherwise
         else:
             self.device = torch.device('cpu')
             # torch.set_num_threads(4) # Presuming 4 cores
             print('WARNING: Found no valid GPU device - Running on CPU')
         # Build Model:
-        print(f'==> Building model {cfg.NET.__name__} on the dataset {cfg.DATA_NAME}')
-        self.net = cfg.NET(self.device)
+        print(f'==> Building model {net.__name__} on the dataset {dat.name()}')
+        self.net = net(self.device, dat.num_classes(), dat.input_channels(), dat.shape())
 
-        if cfg.RESUME_CHECKPOINT:
+        if resume:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
             assert os.path.isdir(cfg.CHECKPOINT_DIR), 'Error: no checkpoint directory found!'
 
             ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD]()
             if ck_file is None:
-                print(f'Found no valid checkpoints for {cfg.NET.__name__}')
+                print(f'-E- Found no valid checkpoints for {net.__name__}')
                 self.best_val_acc = 0
                 self.start_epoch = 0
             else:
@@ -51,9 +55,9 @@ class NeuralNet:
                 self._load_checkpoint(checkpoint['net'])
                 self.best_val_acc = checkpoint['acc']
                 self.start_epoch = checkpoint['epoch']
-                if 'dataset' in checkpoint:  # TODO - Remove this checkup
-                    assert (cfg.DATA_NAME == checkpoint['dataset'])
-                print(f'==> Loaded model with val-acc of {self.best_val_acc}')
+                assert (dat.name() == checkpoint['dataset'])
+
+                print(f'==> Loaded model with val-acc of {self.best_val_acc:.3f}')
 
         else:
             self.best_val_acc = 0
@@ -63,19 +67,20 @@ class NeuralNet:
 
         # Build SGD Algorithm:
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=cfg.LEARN_RATE,
-                                   momentum=0.9, weight_decay=5e-4)
         self.train_gen, self.val_gen, self.classes = (None, None, None)
+        self.optimizer = None
 
-    def train(self, epochs):
+    def train(self, epochs, lr=0.1, set_size=None, batch_size=cfg.BATCH_SIZE):
 
-        # Bring in Data
-        self.train_gen, self.val_gen, self.classes = cfg.TRAIN_GEN(batch_size=cfg.BATCH_SIZE,
-                                                                   dataset_size=cfg.TRAIN_SET_SIZE,
-                                                                   download=cfg.DO_DOWNLOAD)
+        (self.train_gen, set_size), (self.val_gen, _) = dat.trainset(batch_size=batch_size, max_samples=set_size)
+        print(f'==> Training on {set_size} samples with batch size of {batch_size} and lr = {lr}')
+        self.optimizer = optim.SGD(filter(lambda x: x.requires_grad, self.net.parameters()), lr=lr, momentum=0.9,
+                                   weight_decay=5e-4)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=5)
+
         p = Progbar(epochs)
         t_start = time.time()
-        batches_per_step = math.ceil(cfg.TRAIN_SET_SIZE / cfg.BATCH_SIZE)
+        batches_per_step = math.ceil(set_size / batch_size)
         for epoch in range(self.start_epoch, self.start_epoch + epochs):
 
             if cfg.VERBOSITY > 0:
@@ -83,20 +88,22 @@ class NeuralNet:
                 t_step_start = time.time()
             train_loss, train_acc, train_count = self._train_step()
             val_loss, val_acc, val_count = self.test(self.val_gen)
+            self.scheduler.step(val_loss)
             if cfg.VERBOSITY > 0:
                 t_step_end = time.time()
                 batch_time = round((t_step_end - t_step_start) / batches_per_step, 3)
                 p.add(1, values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),
-                                 ("batch_time", batch_time)])
+                                 ("batch_time", batch_time), ("lr", self.optimizer.param_groups[0]['lr'])])
             else:
                 p.add(1,
-                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc)])
+                      values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),
+                              ("lr", self.optimizer.param_groups[0]['lr'])])
             self._checkpoint(val_acc, epoch + 1)
         t_end = time.time()
         print(f'==> Total train time: {t_end-t_start:.3f} secs :: per epoch: {(t_end-t_start)/epochs:.3f} secs')
         banner('Training Phase - End')
 
-    def test(self, data_gen):
+    def test(self, data_gen, print_it=False):
         self.net.eval()
         test_loss = 0
         correct = 0
@@ -119,6 +126,8 @@ class NeuralNet:
         test_acc = 100. * correct / total
         count = f'{correct}/{total}'
 
+        if print_it:
+            print(f'==> Asserted test-acc of: {test_acc:.3f} [{count}]')
         return test_loss, test_acc, count
 
     def summary(self, x_size, print_it=True):
@@ -127,32 +136,37 @@ class NeuralNet:
     def print_weights(self):
         self.net.print_weights()
 
-    def output_size(self, x_shape):
-        return self.net.output_size(x_shape)
+    def output_size(self, x_shape, cuda_allowed=True):
+        return self.net.output_size(x_shape, cuda_allowed)
 
     def _checkpoint(self, val_acc, epoch):
 
         # Decide on whether to checkpoint or not:
         save_it = val_acc > self.best_val_acc
         if save_it and cfg.DONT_SAVE_REDUNDANT:
-            checkpoints = [os.path.basename(f) for f in glob.glob(f'{cfg.CHECKPOINT_DIR}{cfg.NET.__name__}_*_ckpt.t7')]
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.__name__}_{dat.name()}_*_ckpt.t7')
+            checkpoints = [os.path.basename(f) for f in glob.glob(target)]
             if checkpoints:
-                best_cp_val_acc = max([float(f.replace(cfg.NET.__name__, '').split('_')[1]) for f in checkpoints])
+                best_cp_val_acc = max(
+                    [float(f.replace(f'{net.__name__}_{dat.name()}', '').split('_')[1]) for f in checkpoints])
                 if best_cp_val_acc >= val_acc:
                     save_it = False
-                    print(f'Resuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
+                    print(f'\nResuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
         # Do checkpoint
+        val_acc = round(val_acc, 3)  # Don't allow too long a number
         if save_it:
             print(f'\nBeat val_acc record of {self.best_val_acc} with {val_acc} - Saving checkpoint')
             state = {
                 'net': self.net.state_dict(),
-                'dataset': cfg.DATA_NAME,
+                'dataset': dat.name(),
                 'acc': val_acc,
                 'epoch': epoch,
             }
             if not os.path.isdir(cfg.CHECKPOINT_DIR):
                 os.mkdir(cfg.CHECKPOINT_DIR)
-            torch.save(state, f'{cfg.CHECKPOINT_DIR}{cfg.NET.__name__}_{val_acc}_ckpt.t7')
+
+            cp_name = f'{net.__name__}_{dat.name()}_{val_acc}_ckpt.t7'
+            torch.save(state, os.path.join(cfg.CHECKPOINT_DIR, cp_name))
             self.best_val_acc = val_acc
 
     def _train_step(self):
@@ -216,18 +230,19 @@ class NeuralNet:
     @staticmethod
     def _find_top_val_acc_checkpoint():
 
-        checkpoints = [os.path.basename(f) for f in glob.glob(f'{cfg.CHECKPOINT_DIR}{cfg.NET.__name__}_*_ckpt.t7')]
+        target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.__name__}_{dat.name()}_*_ckpt.t7')
+        checkpoints = [os.path.basename(f) for f in glob.glob(target)]
         if not checkpoints:
             return None
         else:
-            checkpoints.sort(key=lambda x: x.replace(cfg.NET.__name__, '').split('_')[1])
+            checkpoints.sort(key=lambda x: float(x.replace(f'{net.__name__}_{dat.name()}', '').split('_')[1]))
             # print(checkpoints)
-            return cfg.CHECKPOINT_DIR + checkpoints[-1]
+            return os.path.join(cfg.CHECKPOINT_DIR, checkpoints[-1])
 
     @staticmethod
     def _find_latest_checkpoint():
-
-        checkpoints = glob.glob(f'{cfg.CHECKPOINT_DIR}{cfg.NET.__name__}_*_ckpt.t7')
+        target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.__name__}_{dat.name()}_*_ckpt.t7')
+        checkpoints = glob.glob(target)
         if not checkpoints:
             return None
         else:
