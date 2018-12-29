@@ -56,7 +56,7 @@ def show_final_mask(show_all_layers=False, layers_to_show=None, show_all_channel
 def plot_ops_saved_vs_ones(net_name, dataset_name, ps, ones_possibilities, gran_thresh, acc_loss, init_acc, 
                            modes=None):
 #    bs_line_rec = get_baseline_rec(net_name, dataset_name, ps, init_acc)
-#    plt.figure()
+    plt.figure()
 #    if bs_line_rec is not None:
 #        plt.plot(ones_possibilities, [bs_line_rec.ops_saved/bs_line_rec.total_ops]*len(ones_possibilities),
 #                                      '--', label=f'baseline, {round(bs_line_rec.init_acc-bs_line_rec.baseline_acc, 2)}% loss')
@@ -120,16 +120,17 @@ def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_
 
 def show_channel(layer, channel, dims, image, ps, filename=None):
     plt.figure()
-    plt.imshow(image)
+    plt.imshow(image, cmap=plt.cm.gray) #(0:black, 1:white)
     plt.title(f'Layer:{layer}, Channel:{channel}, dims:{dims}')
     ax = plt.gca()
     # Minor ticks
     ax.set_xticks(np.arange(-.5, image.shape[0]-1, ps), minor=True);
     ax.set_yticks(np.arange(-.5, image.shape[1]-1, ps), minor=True);
     # Gridlines based on minor ticks
-    ax.grid(which='minor', color='w', linestyle='-', linewidth=2)
+    ax.grid(which='minor', color='r', linestyle='-', linewidth=2)
     plt.tick_params(axis='both', which='major', bottom=False, top=False,
                     left=False, right=False, labelbottom=False, labelleft=False)
+    plt.colorbar()
     if filename is None:
         plt.show()
     else:

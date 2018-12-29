@@ -25,8 +25,11 @@ def uniform_all(C, N, M, patch_size, patterns,  p_start=0):
     for p_idx, filt in uniform_mask2d(N, M, patch_size, patterns, p_start):
         yield p_idx, uniform_layer(C,filt)
         
-def base_line_mask(layers_layout, patch_size, mask_type=np.float32):
-    pattern = np.eye(patch_size, dtype=mask_type)[:, :, np.newaxis]
+def base_line_mask(layers_layout, patch_size, mask_type=np.float32, pattern=None):
+    if pattern is None:
+        pattern = np.eye(patch_size, dtype=mask_type)[:, :, np.newaxis]
+    elif len(pattern.shape) == 2:
+        pattern = pattern[:,:, np.newaxis]
     for C,N,M in layers_layout:
         yield next(uniform_all(C,N,M,patch_size,pattern))[-1]
 

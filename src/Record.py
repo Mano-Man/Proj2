@@ -23,6 +23,8 @@ class Mode(Enum):
     UNIFORM_LAYER = 3
     ALL_MODES = 4
     
+Modes = [mode for mode in Mode if mode is not Mode.ALL_MODES]
+    
 gran_dict = {Mode.MAX_GRANULARITY:"max_granularity", 
              Mode.UNIFORM_FILTERS:"uniform_filters", 
              Mode.UNIFORM_PATCH:"uniform_patch", 
@@ -349,9 +351,9 @@ class Record():
                     patch = []
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),key=lambda x:(x[1][0],x[1][2]),  reverse=True):
                         if res_tuple[2] >= min_acc:
-                            patch.append((p_idx,res_tuple[0],res_tuple[2]))
-                            #patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
-                            #patch.append((p_idx,res_tuple[0]/res_tuple[1],res_tuple[2]))
+                            #patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                            patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
+                            #patch.append((p_idx,100*(res_tuple[0]/(res_tuple[1]+1)),res_tuple[2]))
                     patch.append((-1, 0, self.init_acc))
                     channel.append(patch)
                 layer.append(channel)

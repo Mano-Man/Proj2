@@ -3,6 +3,7 @@
 # ----------------------------------------------------------------------------------------------------------------------
 import torch
 import torch.nn
+import matplotlib.pyplot as plt
 
 import os
 import random
@@ -12,7 +13,7 @@ import time
 #from util.data_import import CIFAR10_Test, CIFAR10_shape
 from RecordFinder import RecordFinder
 from NeuralNet import NeuralNet
-from Record import Mode, Record, RecordType, BaselineResultRc, load_from_file, save_to_file
+from Record import Mode, Modes, Record, RecordType, BaselineResultRc, load_from_file, save_to_file
 from PatchQuantizier import PatchQuantizier
 from ChannelQuantizier import ChannelQuantizier
 from LayerQuantizier import LayerQuantizier
@@ -40,6 +41,42 @@ class Optimizer:
         self.gran_thresh = gran_thresh
         self.ones_range = ones_range
         self.full_net_run_time = None
+        self.total_ops = None
+        
+    def plot_ops_saved_accuracy_uniform_network(self):
+        layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
+        rcs = Record(layers_layout, self.gran_thresh, True, Mode.UNIFORM_LAYER, self.init_acc, self.ps, self.ones_range)
+        no_of_patterns = rcs.all_patterns.shape[2]
+        ops_saved_array = [None]*no_of_patterns
+        acc_array = [None]*no_of_patterns
+        
+        self._init_nn()
+        for p_idx in range(no_of_patterns):
+            sp_list = [None] * len(layers_layout)
+            for layer, layer_mask in enumerate(mf.base_line_mask(layers_layout, self.ps, pattern=rcs.all_patterns[:,:,p_idx])):
+                sp_list[layer] = torch.from_numpy(layer_mask)
+            self.nn.net.strict_mask_update(update_ids=list(range(len(layers_layout))), masks=sp_list)
+            _, test_acc, _ = self.nn.test(self.test_gen)
+            ops_saved, ops_total = self.nn.net.num_ops()
+            self.nn.net.reset_ops()
+            ops_saved_array[p_idx] = ops_saved/ops_total
+            acc_array[p_idx] = test_acc
+        
+        plt.figure()
+        plt.subplot(211)
+        plt.plot(list(range(no_of_patterns)), ops_saved_array,'o')
+        plt.xlabel('pattern index') 
+        plt.ylabel('ops_saved [%]') 
+        plt.title(f'ops saved for uniform network, patch_size:{self.ps}')
+        plt.subplot(212)
+        plt.plot(list(range(no_of_patterns)), acc_array,'o')
+        plt.xlabel('pattern index') 
+        plt.ylabel('accuracy [%]') 
+        plt.title(f'accuracy for uniform network, patch_size:{self.ps}')
+        
+        plt.savefig(f'{cfg.RESULTS_DIR}baseline_all_patterns_{cfg.NET.__name__}_{cfg.DATA_NAME}'+
+                    f'acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_mg{self.gran_thresh}.pdf')
+        
 
     def base_line_result(self):
         layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
@@ -60,7 +97,7 @@ class Optimizer:
         if rec_type == RecordType.lQ_RESUME:
             resume_param_path = self.record_finder.find_rec_filename(in_rec.mode, RecordType.lQ_RESUME)
             quantizier = LayerQuantizier(in_rec, self.init_acc, self.max_acc_loss, self.ps, self.ones_range,
-                                         resume_param_path)
+                                         self.get_total_ops(), resume_param_path)
         else:
             q_rec_fn = self.record_finder.find_rec_filename(in_rec.mode, rec_type)
             Quantizier = PatchQuantizier if rec_type == RecordType.pQ_REC else ChannelQuantizier
@@ -127,8 +164,10 @@ class Optimizer:
         print(f"                     ONES: {self.ones_range[0]}-{self.ones_range[1]-1}")
         print(f"              GRANULARITY: {self.gran_thresh}")
         print(f"            TEST SET SIZE: {self.test_set_size}")
+        print(f"    CHANNELQ UPDATE RATIO: {cfg.CHANNELQ_UPDATE_RATIO}")
+        print(f"      PATCHQ UPDATE RATIO: {cfg.PATCHQ_UPDATE_RATIO}")
         print(f"----------------------------------------------------------------")
-        for mode in Mode:
+        for mode in Modes:
             no_of_runs, run_times = self.eval_run_time(mode)
             total_run_time = (no_of_runs[0] * run_times[0] + no_of_runs[1] * run_times[0] + no_of_runs[2] * run_times[1]) / (60 * 60)
             if total_run_time > 24:
@@ -174,20 +213,46 @@ class Optimizer:
             run_time_for_iter += (end_time - st_time)
 
         run_time_for_iter = run_time_for_iter / no_of_tries
+        recs_first_lvl.fill_empty()
 
-        lQ_runs = sum([p+1 for p in recs_first_lvl.no_of_patterns])
-        if mode == Mode.MAX_GRANULARITY:
-            second_lvl_runs = sum([recs_first_lvl.no_of_channels[l] * recs_first_lvl.no_of_patterns[l] for l in
-                                   range(recs_first_lvl.no_of_layers)])
-            second_lvl_runs += lQ_runs
-        elif mode == Mode.UNIFORM_LAYER:
+        if mode == Mode.UNIFORM_LAYER: 
             second_lvl_runs = 0
-        else:  # Mode.UNIFORM_PATCH or mode==Mode.UNIFORM_FILTERS
-            second_lvl_runs = lQ_runs
-
+            lQ = LayerQuantizier(recs_first_lvl, self.init_acc, 0, self.ps, self.ones_range,
+                                 self.get_total_ops())
+            lQ_runs = lQ.number_of_iters()
+        elif mode == Mode.MAX_GRANULARITY:
+            pQ = PatchQuantizier(recs_first_lvl, self.init_acc, 0, self.ps)
+            pQ.output_rec.fill_empty()
+            cQ = ChannelQuantizier(pQ.output_rec, self.init_acc, 0, self.ps)
+            cQ.output_rec.fill_empty()
+            second_lvl_runs = pQ.number_of_iters() + cQ.number_of_iters()
+            lQ = LayerQuantizier(cQ.output_rec, self.init_acc, 0, self.ps, self.ones_range,
+                                 self.get_total_ops())
+            lQ_runs = lQ.number_of_iters()
+        elif mode == Mode.UNIFORM_FILTERS:
+            pQ = PatchQuantizier(recs_first_lvl, self.init_acc, 0, self.ps)
+            second_lvl_runs = pQ.number_of_iters()
+            pQ.output_rec.fill_empty()
+            lQ = LayerQuantizier(pQ.output_rec, self.init_acc, 0, self.ps, self.ones_range,
+                                 self.get_total_ops())
+            lQ_runs = lQ.number_of_iters()
+        elif mode == Mode.UNIFORM_PATCH:
+            cQ = ChannelQuantizier(recs_first_lvl, self.init_acc, 0, self.ps)
+            cQ.output_rec.fill_empty()
+            second_lvl_runs = cQ.number_of_iters()
+            lQ = LayerQuantizier(cQ.output_rec, self.init_acc, 0, self.ps, self.ones_range,
+                                 self.get_total_ops())
+            lQ_runs = lQ.number_of_iters()
+        
         no_of_runs = (first_lvl_runs, second_lvl_runs, lQ_runs)
         run_times = (round(run_time_for_iter, 3), self.get_full_net_run_time(no_of_tries))
         return no_of_runs, run_times
+    
+    def get_total_ops(self):
+        if self.total_ops is None:
+            self._init_nn()
+            self.get_full_net_run_time(1)
+        return self.total_ops
 
     def get_full_net_run_time(self, no_of_tries):
         if self.full_net_run_time is None:
@@ -197,7 +262,11 @@ class Optimizer:
             for idx in range(no_of_tries):
                 st_time = time.time()
                 _, test_acc, _ = self.nn.test(self.test_gen)
+                if self.total_ops is None:
+                    _, self.total_ops = self.nn.net.num_ops()
                 end_time = time.time()
+                self.nn.net.reset_ops()
+                assert test_acc == self.init_acc, f'starting accuracy does not match! curr_acc:{test_acc}, prev_acc{self.init_acc}'
                 self.full_net_run_time += (end_time - st_time)
             self.full_net_run_time = round(self.full_net_run_time / no_of_tries, 3)
         return self.full_net_run_time

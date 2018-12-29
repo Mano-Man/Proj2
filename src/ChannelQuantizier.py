@@ -33,6 +33,9 @@ class ChannelQuantizier():
             self._generate_patterns(rec.mode, rec.layers_layout, rec.gran_thresh, rec.filename, max_acc_loss, init_acc)
         else:
             self.output_rec = out_rec
+            
+    def number_of_iters(self):
+        return sum(self.output_rec.no_of_patterns)
 
     def simulate(self, nn, test_gen):
         st_point = self.output_rec.find_resume_point()
