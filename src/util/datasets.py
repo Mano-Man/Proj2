@@ -21,7 +21,7 @@ class ClassificationDataset:
         self._dataset_space = dataset_space
 
         # Hard Coded
-        from src.Config import DATASET_DIR
+        from Config import DATASET_DIR
         self._data_dir = DATASET_DIR
         if not isinstance(expected_files, list):
             self._expected_files = [expected_files]

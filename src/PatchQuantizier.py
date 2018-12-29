@@ -35,7 +35,7 @@ class PatchQuantizier():
             self.output_rec = out_rec
             
     def number_of_iters(self):
-        return sum(self.output_rec.no_of_patterns)
+        return self.output_rec.size
             
     def simulate(self, nn, test_gen):       
         st_point = self.output_rec.find_resume_point()

@@ -41,7 +41,7 @@ class RecordFinder():
 
     def find_all_FRs(self, mode):
         regex = self._final_rec_regex(mode)
-        return glob.glob(f'{cfg.RESULTS_DIR}{regex}')
+        return glob.glob(f'{cfg.RESULTS_DIR}/{regex}')
 
     def print_result(self, mode):
         f_rec_fn = self.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
@@ -51,7 +51,7 @@ class RecordFinder():
         print(f_rec)
 
     def _find_rec_file_by_time(self, regex):
-        rec_filename = glob.glob(f'{cfg.RESULTS_DIR}{regex}')
+        rec_filename = glob.glob(f'{cfg.RESULTS_DIR}/{regex}')
         if not rec_filename:
             return None
         else:
