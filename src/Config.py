@@ -8,15 +8,15 @@ import os
 #                                                   Data Import
 # ----------------------------------------------------------------------------------------------------------------------
 
-
-basedir, _ = os.path.split(os.path.abspath(__file__))
-basedir = os.path.join(basedir, 'data')
-if not os.path.isdir(basedir):
+if os.path.isdir('/content/drive/My Drive/Colab Notebooks/'):
     basedir = '/content/drive/My Drive/Colab Notebooks/data'
+else:
+    basedir, _ = os.path.split(os.path.abspath(__file__))
+    basedir = os.path.join(basedir, 'data')
 
-CHECKPOINT_DIR = os.path.join(basedir, 'checkpoint') 
-RESULTS_DIR = os.path.join(basedir, 'results') 
-DATASET_DIR = os.path.join(basedir, 'datasets') 
+CHECKPOINT_DIR = os.path.join(basedir, 'checkpoint')
+RESULTS_DIR = os.path.join(basedir, 'results')
+DATASET_DIR = os.path.join(basedir, 'datasets')
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                 Global Config
@@ -25,8 +25,8 @@ DATASET_DIR = os.path.join(basedir, 'datasets')
 NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial, AlexNetS]
 NET = NETS[1]  # The chosen network
 
-# print(Datasets.which()) # ('MNIST', 'CIFAR10', 'ImageNet','STL10)
-DATA = Datasets.get('CIFAR10')
+#print(Datasets.which()) #('MNIST', 'CIFAR10', 'ImageNet', 'TinyImageNet', 'STL10', 'FashionMNIST')
+DATA = Datasets.get('CIFAR10',DATASET_DIR)
 
 BATCH_SIZE = 128
 TEST_SET_SIZE = 1000 #BATCH_SIZE * 8  # Better to align it to Batch Size for speed!

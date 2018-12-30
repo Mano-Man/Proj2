@@ -12,17 +12,15 @@ from .gen import banner
 #                                                Base Class
 # ----------------------------------------------------------------------------------------------------------------------
 class ClassificationDataset:
-    def __init__(self, class_labels, shape, testset_size, trainset_size, dataset_space, expected_files):
+    def __init__(self, data_dir, class_labels, shape, testset_size, trainset_size, dataset_space, expected_files):
         # Basic Dataset Info
         self._class_labels = tuple(class_labels)
         self._shape = tuple(shape)
         self._testset_size = testset_size
         self._trainset_size = trainset_size
         self._dataset_space = dataset_space
+        self._data_dir = data_dir
 
-        # Hard Coded
-        from Config import DATASET_DIR
-        self._data_dir = DATASET_DIR
         if not isinstance(expected_files, list):
             self._expected_files = [expected_files]
         else:
@@ -31,7 +29,7 @@ class ClassificationDataset:
         self._download = True if any(
             not os.path.isfile(os.path.join(self._data_dir, file)) for file in self._expected_files) else False
 
-    def data_summary(self):
+    def data_summary(self, show_sample=False):
         img_type = 'Grayscale' if self._shape[0] == 1 else 'Color'
         banner('Dataset Summary')
         print(f'\n* Dataset Name: {self.name()} , {img_type} images')
@@ -40,8 +38,10 @@ class ClassificationDataset:
         print(f'* Test Set Size: {self._testset_size} samples')
         print(f'* Estimated Hard-disk space required: ~{convert_bytes(self._dataset_space)}')
         print(f'* Number of classes: {self.num_classes()}')
-        print(f'* Class Labels:\n', self._class_labels)
+        print(f'* Class Labels:\n{self._class_labels}')
         banner()
+        if show_sample:
+            self.trainset(show_sample=True)
 
     def name(self):
         assert self.__class__.__name__ != 'ClassificationDataset'
@@ -77,6 +77,7 @@ class ClassificationDataset:
             num_workers, pin_memory = 4, False
 
         test_dataset = self._test_importer()
+        # print(sum(1 for _ in test_dataset))
 
         if max_samples < self._testset_size:
             testset_siz = max_samples
@@ -90,7 +91,7 @@ class ClassificationDataset:
 
         return test_gen, testset_siz
 
-    def trainset(self, batch_size, valid_size=0.1, max_samples=None, augment=True, shuffle=True, random_seed=None,
+    def trainset(self, batch_size=128, valid_size=0.1, max_samples=None, augment=True, shuffle=True, random_seed=None,
                  show_sample=False, device='cuda'):
 
         if device.lower() == 'cuda' and torch.cuda.is_available():
@@ -103,6 +104,8 @@ class ClassificationDataset:
         assert ((valid_size >= 0) and (valid_size <= 1)), "[!] Valid_size should be in the range [0, 1]."
 
         train_dataset = self._train_importer(augment)
+        # print(sum(1 for _ in train_dataset)) #Can be used to discover the trainset size if needed
+
         val_dataset = self._train_importer(False)  # Don't augment validation
 
         indices = list(range(self._trainset_size))
@@ -131,7 +134,7 @@ class ClassificationDataset:
         return (train_loader, num_train), (valid_loader, num_valid)
 
     def _show_sample(self, train_dataset, siz):
-        images, labels = iter(torch.utils.data.DataLoader(train_dataset, batch_size=siz ** 2)).next()
+        images, labels = iter(torch.utils.data.DataLoader(train_dataset, shuffle=True, batch_size=siz ** 2)).next()
         plot_images(images.numpy().transpose([0, 2, 3, 1]), labels, self._class_labels, siz=siz)
 
     def _train_importer(self, augment):
@@ -146,15 +149,16 @@ class ClassificationDataset:
 # ----------------------------------------------------------------------------------------------------------------------
 
 class CIFAR10(ClassificationDataset):
-    def __init__(self):
+    def __init__(self, data_dir):
         super().__init__(
+            data_dir=data_dir,
             class_labels=['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship',
                           'truck'],
             shape=(3, 32, 32),
             testset_size=10000,
             trainset_size=50000,
             dataset_space=170500096,
-            expected_files='cifar-10-python.tar.gz'
+            expected_files=os.path.join('CIFAR10', 'cifar-10-python.tar.gz')
         )
 
     def _train_importer(self, augment):
@@ -162,73 +166,124 @@ class CIFAR10(ClassificationDataset):
         if augment:
             ops.insert(0, transforms.RandomCrop(32, padding=4))
             ops.insert(0, transforms.RandomHorizontalFlip())
-        return datasets.CIFAR10(root=self._data_dir, train=True, download=self._download,
+        return datasets.CIFAR10(root=os.path.join(self._data_dir, 'CIFAR10'), train=True, download=self._download,
                                 transform=transforms.Compose(ops))
 
     def _test_importer(self):
         ops = [transforms.ToTensor(), transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
-        return datasets.CIFAR10(root=self._data_dir, train=False, download=self._download,
+        return datasets.CIFAR10(root=os.path.join(self._data_dir, 'CIFAR10'), train=False, download=self._download,
                                 transform=transforms.Compose(ops))
 
 
 class MNIST(ClassificationDataset):
-    def __init__(self):
-        super().__init__(class_labels=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
-                         shape=(1, 28, 28), testset_size=10000, trainset_size=60000, dataset_space=55443456,
-                         expected_files=[os.path.join('processed', 'training.pt'),
-                                         os.path.join('processed', 'test.pt')])
+    def __init__(self, data_dir):
+        super().__init__(data_dir=data_dir,
+                         class_labels=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
+                         shape=(1, 28, 28), testset_size=10000, trainset_size=60000, dataset_space=110403584,
+                         expected_files=[os.path.join('MNIST', 'processed', 'training.pt'),
+                                         os.path.join('MNIST', 'processed', 'test.pt')])
 
     def _train_importer(self, augment):  # Convert 1 channels -> 3 channels #transforms.Grayscale(3),
         ops = [transforms.ToTensor(),
                transforms.Normalize(mean=(0.1307,), std=(0.3081,))]
-        return datasets.MNIST(root=self._data_dir, train=True, download=self._download,
+        return datasets.MNIST(root=os.path.join(self._data_dir, 'MNIST'), train=True, download=self._download,
                               transform=transforms.Compose(ops))
 
     def _test_importer(self):  # Convert 1 channels -> 3 channels
         ops = [transforms.ToTensor(),
                transforms.Normalize(mean=(0.1307,), std=(0.3081,))]
-        return datasets.MNIST(root=self._data_dir, train=False, download=self._download,
+        return datasets.MNIST(root=os.path.join(self._data_dir, 'MNIST'), train=False, download=self._download,
                               transform=transforms.Compose(ops))
 
 
+class FashionMNIST(ClassificationDataset):
+    def __init__(self, data_dir):
+        super().__init__(data_dir=data_dir,
+                         class_labels=['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt',
+                                       'Sneaker', 'Bag', 'Ankle boot'],
+                         shape=(1, 28, 28), testset_size=10000, trainset_size=60000, dataset_space=110403584,
+                         expected_files=[os.path.join('FashionMNIST', 'processed', 'training.pt'),
+                                         os.path.join('FashionMNIST', 'processed', 'test.pt')])
+
+    def _train_importer(self, augment):  # Convert 1 channels -> 3 channels #transforms.Grayscale(3),
+        ops = [transforms.ToTensor()]
+        return datasets.FashionMNIST(root=os.path.join(self._data_dir, 'FashionMNIST'), train=True,
+                                     download=self._download,
+                                     transform=transforms.Compose(ops))
+
+    def _test_importer(self):
+        ops = [transforms.ToTensor()]
+        return datasets.FashionMNIST(root=os.path.join(self._data_dir, 'FashionMNIST'), train=False,
+                                     download=self._download,
+                                     transform=transforms.Compose(ops))
+
+
 class STL10(ClassificationDataset):
-    def __init__(self):
-        super().__init__(
-            class_labels=['airplane', 'bird', 'car', 'cat', 'deer', 'dog', 'horse', 'monkey', 'ship', 'truck'],
-            shape=(3, 96, 96), testset_size=8000, trainset_size=5000, dataset_space=2640400384,
-            expected_files='stl10_binary.tar.gz')
+    def __init__(self, data_dir):
+        super().__init__(data_dir=data_dir,
+                         class_labels=['airplane', 'bird', 'car', 'cat', 'deer', 'dog', 'horse', 'monkey', 'ship',
+                                       'truck'],
+                         shape=(3, 96, 96), testset_size=8000, trainset_size=5000, dataset_space=2640400384,
+                         expected_files=os.path.join('STL10', 'stl10_binary.tar.gz'))
 
     def _train_importer(self, augment):
         ops = [transforms.ToTensor()]
-        return datasets.STL10(root=self._data_dir, split='train', download=self._download,
+        return datasets.STL10(root=os.path.join(self._data_dir, 'STL10'), split='train', download=self._download,
                               transform=transforms.Compose(ops))
 
     def _test_importer(self):
         ops = [transforms.ToTensor()]
-        return datasets.STL10(root=self._data_dir, split='test', download=self._download,
+        return datasets.STL10(root=os.path.join(self._data_dir, 'STL10'), split='test', download=self._download,
                               transform=transforms.Compose(ops))
 
 
+class TinyImageNet(ClassificationDataset):  # TODO - Implement support for Val Directory
+    def __init__(self, data_dir):
+        super().__init__(data_dir=data_dir,
+                         class_labels=TINY_IMAGENET_NAMES,
+                         shape=(3, 64, 64), testset_size=10000, trainset_size=100000, dataset_space=497799168,
+                         expected_files=[os.path.join('TinyImageNet', 'train'), os.path.join('TinyImageNet', 'test')])
+
+    def _train_importer(self, augment):
+        ops = [transforms.ToTensor()]
+        if augment:
+            ops.insert(0, transforms.RandomHorizontalFlip())
+
+        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'TinyImageNet', 'train'),
+                                    transform=transforms.Compose(ops))
+
+    def _test_importer(self):
+        ops = [transforms.ToTensor()]
+        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'TinyImageNet', 'test'),
+                                    transform=transforms.Compose(ops))
+
+
 class ImageNet(ClassificationDataset):
-    def __init__(self):
-        super().__init__(
-            class_labels=IMAGE_NETLABEL_NAMES,
-            shape=(3, 256, 256), testset_size=14197122, trainset_size=0, dataset_space=0,
-            expected_files=['train', 'test'])
+    # TODO- There might be a mismatch between class labels and the IMAGE_NETLABEL_NAMES - See TinyImageNet_label_names()
+    def __init__(self, data_dir):
+        super().__init__(data_dir=data_dir,
+                         class_labels=IMAGE_NETLABEL_NAMES,
+                         shape=(3, 256, 256), testset_size=10000, trainset_size=100000, dataset_space=497799168,
+                         expected_files=[os.path.join('ImageNet', 'train'), os.path.join('ImageNet', 'test')])
 
     def _train_importer(self, augment):
         ops = [transforms.ToTensor(), transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
         if augment:
-            ops.insert(0, transforms.RandomSizedCrop(224))
+            ops.insert(0, transforms.Resize(256))
+            ops.insert(0, transforms.RandomResizedCrop(224))
             ops.insert(0, transforms.RandomHorizontalFlip())
+        else:
+            ops.insert(0, transforms.Resize(256))
+            ops.insert(0, transforms.CenterCrop(224))
 
-        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'train'), transform=transforms.Compose(ops))
+        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'ImageNet', 'train'),
+                                    transform=transforms.Compose(ops))
 
     def _test_importer(self):
         ops = [transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(),
                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
-        # TODO - what happens if folder is empty ?
-        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'test'), transform=transforms.Compose(ops))
+        return datasets.ImageFolder(root=os.path.join(self._data_dir, 'ImageNet', 'test'),
+                                    transform=transforms.Compose(ops))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -239,7 +294,9 @@ class Datasets:
         'MNIST': MNIST,
         'CIFAR10': CIFAR10,
         'ImageNet': ImageNet,
-        'STL10': STL10
+        'TinyImageNet': TinyImageNet,
+        'STL10': STL10,
+        'FashionMNIST': FashionMNIST
     }
 
     @staticmethod
@@ -247,8 +304,8 @@ class Datasets:
         return tuple(Datasets._implemented.keys())
 
     @staticmethod
-    def get(dataset_name):
-        return Datasets._implemented[dataset_name]()
+    def get(dataset_name, data_dir):
+        return Datasets._implemented[dataset_name](data_dir)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -270,7 +327,7 @@ def plot_images(images, cls_true, label_names, cls_pred=None, siz=3):
 
     for i, ax in enumerate(axes.flat):
         # plot img
-        ax.imshow(images[i, :, :, :].squeeze(), interpolation='spline16')
+        ax.imshow(images[i, :, :, :].squeeze(), interpolation='spline16', cmap='gray')
 
         # show true & predicted classes
         cls_true_name = label_names[cls_true[i]]
@@ -471,3 +528,52 @@ IMAGE_NETLABEL_NAMES = ('kit_fox', 'english_setter', 'siberian_husky', 'australi
                         'cd_player', 'lens_cap', 'thatch', 'vault', 'beaker', 'bubble', 'cheeseburger',
                         'parallel_bars', 'flagpole', 'coffee_mug', 'rubber_eraser', 'stole',
                         'carbonara', 'dumbbell')
+
+TINY_IMAGENET_NAMES = ('goldfish', 'european fire salamander', 'bullfrog', 'tailed frog', 'american alligator',
+                       'boa constrictor', 'trilobite', 'scorpion', 'black widow', 'tarantula', 'centipede', 'goose',
+                       'koala', 'jellyfish', 'brain coral', 'snail', 'slug', 'sea slug', 'american lobster',
+                       'spiny lobster', 'black stork', 'king penguin', 'albatross', 'dugong', 'chihuahua',
+                       'yorkshire terrier', 'golden retriever', 'labrador retriever', 'german shepherd',
+                       'standard poodle', 'tabby', 'persian cat', 'egyptian cat', 'cougar', 'lion', 'brown bear',
+                       'ladybug', 'fly', 'bee', 'grasshopper', 'walking stick', 'cockroach', 'mantis', 'dragonfly',
+                       'monarch', 'sulphur butterfly', 'sea cucumber', 'guinea pig', 'hog', 'ox', 'bison', 'bighorn',
+                       'gazelle', 'arabian camel', 'orangutan', 'chimpanzee', 'baboon', 'african elephant',
+                       'lesser panda', 'abacus', 'academic gown', 'altar', 'apron', 'backpack', 'bannister',
+                       'barbershop', 'barn', 'barrel', 'basketball', 'bathtub', 'beach wagon', 'beacon', 'beaker',
+                       'beer bottle', 'bikini', 'binoculars', 'birdhouse', 'bow tie', 'brass', 'broom', 'bucket',
+                       'bullet train', 'butcher shop', 'candle', 'cannon', 'cardigan', 'cash machine', 'cd player',
+                       'chain', 'chest', 'christmas stocking', 'cliff dwelling', 'computer keyboard', 'confectionery',
+                       'convertible', 'crane', 'dam', 'desk', 'dining table', 'drumstick', 'dumbbell', 'flagpole',
+                       'fountain', 'freight car', 'frying pan', 'fur coat', 'gasmask', 'go-kart', 'gondola',
+                       'hourglass', 'ipod', 'jinrikisha', 'kimono', 'lampshade', 'lawn mower', 'lifeboat', 'limousine',
+                       'magnetic compass', 'maypole', 'military uniform', 'miniskirt', 'moving van', 'nail',
+                       'neck brace', 'obelisk', 'oboe', 'organ', 'parking meter', 'pay-phone', 'picket fence',
+                       'pill bottle', 'plunger', 'pole', 'police van', 'poncho', 'pop bottle', "potter's wheel",
+                       'projectile', 'punching bag', 'reel', 'refrigerator', 'remote control', 'rocking chair',
+                       'rugby ball', 'sandal', 'school bus', 'scoreboard', 'sewing machine', 'snorkel', 'sock',
+                       'sombrero', 'space heater', 'spider web', 'sports car', 'steel arch bridge', 'stopwatch',
+                       'sunglasses', 'suspension bridge', 'swimming trunks', 'syringe', 'teapot', 'teddy', 'thatch',
+                       'torch', 'tractor', 'triumphal arch', 'trolleybus', 'turnstile', 'umbrella', 'vestment',
+                       'viaduct', 'volleyball', 'water jug', 'water tower', 'wok', 'wooden spoon', 'comic book',
+                       'plate', 'guacamole', 'ice cream', 'ice lolly', 'pretzel', 'mashed potato', 'cauliflower',
+                       'bell pepper', 'mushroom', 'orange', 'lemon', 'banana', 'pomegranate', 'meat loaf', 'pizza',
+                       'potpie', 'espresso', 'alp', 'cliff', 'coral reef', 'lakeside', 'seashore', 'acorn')
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                               	Dataset Parsers
+# ----------------------------------------------------------------------------------------------------------------------
+
+def TinyImageNet_label_names():
+    words_file = r'C:\Users\idoim\Desktop\Course\Project 2\src\data\datasets\TinyImageNet\words.txt'
+    file = open(words_file, "r")
+
+    tiny = TinyImageNet(r'C:\Users\idoim\Desktop\Course\Project 2\src\data\datasets')
+    class_to_dir = tiny._train_importer(False).class_to_idx  # The default mapping is in this dictionary
+
+    mapper = {}
+    for line in file.read().splitlines():
+        id, descriptors = line.split("	")
+        mapper[id] = descriptors.split(", ")[0]
+
+    return [mapper[id] for id in class_to_dir.keys()]

@@ -38,7 +38,7 @@ def main():
     optim.by_uniform_filters()
     optim.by_uniform_patches()
     optim.by_max_granularity()
-            
+
 def run_all_acc_loss_possibilities(ps, ones_range, gran_th, mode=None, acc_loss_opts=ACC_LOSS_OPTS):
     for acc_loss in acc_loss_opts:
         optim = Optimizer(ps, ones_range, gran_th, acc_loss)
@@ -92,13 +92,14 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 
 
 def training():
+    # dat.data_summary(show_sample=True)
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
     nn.summary(dat.shape())
     nn.train(epochs=50, lr=0.1)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
-    
+
 
 
 
@@ -143,7 +144,8 @@ def info_tutorial():
     # Turns on 3 ids and turns off all others
     chosen_victims = random.sample(range(nn.net.num_spatial_layers()), 4)
     nn.net.strict_mask_update(update_ids=chosen_victims[0:3],
-                              masks=[torch.zeros(p_spat_sizes[chosen_victims[0]]), torch.zeros(p_spat_sizes[chosen_victims[1]]),
+                              masks=[torch.zeros(p_spat_sizes[chosen_victims[0]]),
+                                     torch.zeros(p_spat_sizes[chosen_victims[1]]),
                                      torch.zeros(p_spat_sizes[chosen_victims[2]])])
 
     # Turns on one additional id and *does not* turn off all others
@@ -167,7 +169,7 @@ def data_tutorial():
                                                                         max_samples=dat.max_train_size(),
                                                                         show_sample=True)
     test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
-    
+
 def debug_layer_q():
     print('debuging...')
     regexes = ['LayerQ_ma3.5_PatchQ_ma3.5_ResNet18Spatial_CIFAR10_acc93.5_uniform_filters_ps2_ones1x3_mg10_',
@@ -178,19 +180,19 @@ def debug_layer_q():
         rec = load_from_file(fn, '')
         plt.figure()
         plt.subplot(221)
-        plt.plot(list(range(len(rec.test_acc_array))), rec.test_acc_array,'o--') 
-        plt.ylabel('acc [%]') 
-    
+        plt.plot(list(range(len(rec.test_acc_array))), rec.test_acc_array,'o--')
+        plt.ylabel('acc [%]')
+
         plt.subplot(222)
-        plt.plot(list(range(len(rec.ops_saved_array))), rec.ops_saved_array,'o--') 
-        plt.ylabel('ops saved') 
+        plt.plot(list(range(len(rec.ops_saved_array))), rec.ops_saved_array,'o--')
+        plt.ylabel('ops saved')
         print('debuging...')
         plt.subplot(223)
-        plt.plot(list(range(len(rec.acc_diff_arr))), rec.acc_diff_arr,'o--') 
+        plt.plot(list(range(len(rec.acc_diff_arr))), rec.acc_diff_arr,'o--')
         plt.ylabel('acc diff')
-        
+
         plt.subplot(224)
-        plt.plot(list(range(len(rec.ops_diff_arr))), rec.ops_diff_arr,'o--') 
+        plt.plot(list(range(len(rec.ops_diff_arr))), rec.ops_diff_arr,'o--')
         plt.ylabel('ops diff')
         print('debuging...')
         plt.savefig(f'{cfg.RESULTS_DIR}debug_{regex}.pdf')
@@ -202,22 +204,7 @@ def debug_layer_q():
 
 def debug():
     nn1 = NeuralNet()
-    nn2 = NeuralNet()
-    nn3 = NeuralNet()
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
-
-    # Test One:
-    nn1.test(test_gen, print_it=True)
-    nn1.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
-    nn1.test(test_gen, print_it=True)
-
-    # Test Two:
-    nn2.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
-    nn2.test(test_gen, print_it=True)
-
-    # Test One:
-    nn3.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE,freeze=False)
-    nn3.test(test_gen, print_it=True)
 
 
 if __name__ == '__main__':

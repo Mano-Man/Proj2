@@ -47,7 +47,7 @@ class NeuralNet:
 
             ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD]()
             if ck_file is None:
-                print(f'-E- Found no valid checkpoints for {net.__name__}')
+                print(f'-E- Found no valid checkpoints for {net.__name__} on {dat.name()}')
                 self.best_val_acc = 0
                 self.start_epoch = 0
             else:
