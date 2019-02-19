@@ -3,7 +3,6 @@
 # ----------------------------------------------------------------------------------------------------------------------
 import glob
 import os
-import re
 
 from Record import Mode, RecordType, load_from_file, gran_dict
 import Config as cfg
@@ -14,7 +13,8 @@ import Config as cfg
 # ----------------------------------------------------------------------------------------------------------------------
 
 class RecordFinder():
-    def __init__(self, net_name, dataset_name, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc):
+    def __init__(self, net_name, dataset_name, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc,
+                 pQ_ratio=cfg.PATCHQ_UPDATE_RATIO, cQ_ratio=cfg.CHANNELQ_UPDATE_RATIO):
         self.net_name = net_name
         self.dataset_name = dataset_name
         self.ps = patch_size
@@ -22,6 +22,8 @@ class RecordFinder():
         self.gran_thresh = gran_thresh
         self.max_acc_loss = max_acc_loss
         self.init_acc = init_acc
+        self.pQ_ratio = pQ_ratio
+        self.cQ_ratio = cQ_ratio
 
     def find_rec_filename(self, mode, record_type):
         if record_type == RecordType.FIRST_LVL_REC:
@@ -41,7 +43,8 @@ class RecordFinder():
 
     def find_all_FRs(self, mode):
         regex = self._final_rec_regex(mode)
-        return glob.glob(f'{cfg.RESULTS_DIR}/{regex}')
+        target = os.path.join(cfg.RESULTS_DIR, regex)
+        return glob.glob(target)
 
     def print_result(self, mode):
         f_rec_fn = self.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
@@ -51,7 +54,7 @@ class RecordFinder():
         print(f_rec)
 
     def _find_rec_file_by_time(self, regex):
-        rec_filename = glob.glob(f'{cfg.RESULTS_DIR}/{regex}')
+        rec_filename = glob.glob(os.path.join(cfg.RESULTS_DIR, regex))
         if not rec_filename:
             return None
         else:
@@ -68,7 +71,7 @@ class RecordFinder():
         return filename
 
     def _cQ_regex(self, mode):
-        regex = f'ChannelQ_ma{self.max_acc_loss}_'
+        regex = f'ChannelQ{cfg.CQ_OPTION}r{self.cQ_ratio}_ma{self.max_acc_loss}_'
         if mode == Mode.UNIFORM_PATCH:
             regex += self._first_lvl_regex(mode)
         else:  # mode == rc.max_granularity
@@ -76,7 +79,7 @@ class RecordFinder():
         return regex
 
     def _lQ_resume_regex(self, mode):
-        regex = f'LayerQ_ma{self.max_acc_loss}_'
+        regex = f'LayerQ{cfg.LQ_OPTION}_ma{self.max_acc_loss}_'
         if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
             regex += self._cQ_regex(mode)
         elif mode == Mode.UNIFORM_FILTERS:
@@ -86,10 +89,21 @@ class RecordFinder():
         return regex
 
     def _pQ_regex(self, mode):
-        return (f'PatchQ_ma{self.max_acc_loss}_' + self._first_lvl_regex(mode))
+        regex = f'PatchQ{cfg.PQ_OPTION}r{self.pQ_ratio}_ma{self.max_acc_loss}_'
+        return (regex + self._first_lvl_regex(mode))
 
     def _final_rec_regex(self, mode):
-        return f'FR_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[mode]}_ma{self.max_acc_loss}_*pkl'
+        quant_name = f'LQ{cfg.LQ_OPTION}'
+        if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
+            quant_name += f'_CQ{cfg.CQ_OPTION}r{cfg.CHANNELQ_UPDATE_RATIO}'
+        if mode == Mode.UNIFORM_FILTERS or mode == Mode.MAX_GRANULARITY:
+            quant_name += f'_PQ{cfg.PQ_OPTION}r{cfg.PATCHQ_UPDATE_RATIO}'
+            
+        reg = f'FR_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_{quant_name}'
+        reg+= f'_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_'
+        reg+= f'{gran_dict[mode]}_ma{self.max_acc_loss}_*pkl'
+        return reg
 
     def _baseline_rec_regex(self):
         return f'BS_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_ps{self.ps}_os*_bacc*pkl'
+

@@ -6,6 +6,7 @@ import torch.nn
 
 import glob
 import matplotlib.pyplot as plt
+import os
 
 from Optimizer import Optimizer
 from NeuralNet import NeuralNet
@@ -168,32 +169,17 @@ def data_tutorial():
                                                                         show_sample=True)
     test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     
-def debug_layer_q():
+def debug_layer_q(acc_loss, regexes=None):
     print('debuging...')
-    regexes = ['LayerQ_ma3.5_PatchQ_ma3.5_ResNet18Spatial_CIFAR10_acc93.5_uniform_filters_ps2_ones1x3_mg10_',
-               'LayerQ_ma3.5_ChannelQ_ma3.5_ResNet18Spatial_CIFAR10_acc93.5_uniform_patch_ps2_ones1x3_mg10_',
-               'LayerQ_ma3.5_ResNet18Spatial_CIFAR10_acc93.5_uniform_layer_ps2_ones1x3_mg10_']
+    if regexes is None:
+        regexes = [f'LayerQ{cfg.LQ_OPTION}_'+f'ma{acc_loss}_PatchQ_ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_filters_ps2_ones1x3_mg10_',
+                   f'LayerQ{cfg.LQ_OPTION}_'+f'ma{acc_loss}_ChannelQ_ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_patch_ps2_ones1x3_mg10_',
+                   f'LayerQ{cfg.LQ_OPTION}_'+f'ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_layer_ps2_ones1x3_mg10_']
     for regex in regexes:
-        fn = glob.glob(f'{cfg.RESULTS_DIR}{regex}*pkl')[0]
+        print(f'{cfg.RESULTS_DIR}/{regex}*pkl')
+        fn = glob.glob(f'{cfg.RESULTS_DIR}/{regex}*pkl')[0]
         rec = load_from_file(fn, '')
-        plt.figure()
-        plt.subplot(221)
-        plt.plot(list(range(len(rec.test_acc_array))), rec.test_acc_array,'o--') 
-        plt.ylabel('acc [%]') 
-    
-        plt.subplot(222)
-        plt.plot(list(range(len(rec.ops_saved_array))), rec.ops_saved_array,'o--') 
-        plt.ylabel('ops saved') 
-        print('debuging...')
-        plt.subplot(223)
-        plt.plot(list(range(len(rec.acc_diff_arr))), rec.acc_diff_arr,'o--') 
-        plt.ylabel('acc diff')
-        
-        plt.subplot(224)
-        plt.plot(list(range(len(rec.ops_diff_arr))), rec.ops_diff_arr,'o--') 
-        plt.ylabel('ops diff')
-        print('debuging...')
-        plt.savefig(f'{cfg.RESULTS_DIR}debug_{regex}.pdf')
+        rec.debug(os.path.basename(fn))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -218,15 +204,35 @@ def debug():
     # Test One:
     nn3.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE,freeze=False)
     nn3.test(test_gen, print_it=True)
+    
+def main_ones(ones_range):
+    eval_baseline_and_runtimes(2,ones_range,10)
+    acc_loss = [1, 3.5, 5]
+    run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, ones_range,
+                                   10, acc_loss, 93.5)
+    
+def main_2_ones_with_maxg():
+    eval_baseline_and_runtimes(2,(2,3),10)
+    acc_loss = [1, 3.5, 5]
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=acc_loss)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (2,3),
+                                   10, acc_loss, 93.5)
+    
+def main_1x3_ones():
+    acc_loss = [3.5]
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
+                                   10, acc_loss, 93.5)
 
 
 if __name__ == '__main__':
-    eval_baseline_and_runtimes(2,(1,3),10)
-    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=[2])
-    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=[2])
-    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=[2])
-    debug_layer_q()
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
-                                   10, [0, 1, 2, 3, 3.5, 5, 10], 93.5)
-    #main_plot_ops_saved_vs_ones(Mode.UNIFORM_LAYER)
+    main_2_ones_with_maxg()
 

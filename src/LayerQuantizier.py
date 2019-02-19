@@ -6,12 +6,14 @@ Created on Mon Nov 26 19:51:55 2018
 """
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 from Record import Mode, FinalResultRc, load_from_file, save_to_file
 import Config as cfg
 from Config import DATA as dat
 import maskfactory as mf
 
+LQ_DEBUG = False
 
 class LayerQuantResumeRec():
     def __init__(self,no_of_layers, input_length, max_acc_loss, inp):
@@ -25,7 +27,6 @@ class LayerQuantResumeRec():
         self.curr_best_acc = 0
         self.curr_resume_index = self.resume_index.copy()
         self.curr_best_mask = None
-        self.reset_occured = False
         self.input = inp
         self.test_acc_array = []
         self.ops_saved_array = []
@@ -39,18 +40,6 @@ class LayerQuantResumeRec():
                     self.mark_finished(layer=layer)
                 return layer
         return None
-        
-    def reset(self, clean_input_length):
-        no_of_layers = len(self.resume_index)
-        self.resume_index = [0]*(no_of_layers)
-        self.is_final = [False]*(no_of_layers)
-        for layer, idx in enumerate(self.resume_index):
-            if idx==(clean_input_length[layer]-1):
-                self.is_final[layer] = True
-        self.reset_occured = True
-
-    def should_reset(self):
-        return self.is_final==[True]*len(self.is_final)
     
     def mark_finished(self, layer=None, mark_all=False):
         if mark_all:
@@ -59,10 +48,7 @@ class LayerQuantResumeRec():
             self.is_final[layer] = True
 
     def is_finised(self):
-        return self.should_reset() and self.reset_occured
-
-    def mock_reset(self):
-        self.reset_occured = True
+        return self.is_final==[True]*len(self.is_final)
         
     def add_rec(self, acc, ops_saved):
         self.test_acc_array.append(acc)
@@ -71,6 +57,22 @@ class LayerQuantResumeRec():
     def add_next_idx(self, acc_diff, ops_diff):
         self.acc_diff_arr.append(acc_diff)
         self.ops_diff_arr.append(ops_diff)
+        
+    def debug(self, fn):
+        plt.figure()
+        plt.subplot(221)
+        plt.plot(list(range(len(self.test_acc_array))), self.test_acc_array,'o--') 
+        plt.ylabel('acc [%]') 
+        plt.subplot(222)
+        plt.plot(list(range(len(self.ops_saved_array))), self.ops_saved_array,'o--') 
+        plt.ylabel('ops saved') 
+        plt.subplot(223)
+        plt.plot(list(range(len(self.acc_diff_arr))), self.acc_diff_arr,'o--') 
+        plt.ylabel('acc diff')
+        plt.subplot(224)
+        plt.plot(list(range(len(self.ops_diff_arr))), self.ops_diff_arr,'o--') 
+        plt.ylabel('ops diff')
+        plt.savefig(f'{cfg.RESULTS_DIR}/debug_{fn}.pdf')
         
 
 
@@ -87,9 +89,6 @@ class LayerQuantizier():
         
         self.input = rec.gen_pattern_lists(self.min_acc)
         self.input = [self.input[l][0][0] for l in range(len(self.input))] 
-        #self._clean_input()
-        assert len(self.input[0][0])==4
-        print('option 4')
         
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
@@ -101,14 +100,15 @@ class LayerQuantizier():
         else:
             self.default_in_pattern = np.ones((1, 1), dtype=self.input_patterns[0][0].dtype)
 
-        self.resume_param_filename = 'LayerQ_ma' + str(max_acc_loss) + '_' + rec.filename
+        self.resume_param_filename = f'LayerQ{cfg.LQ_OPTION}_ma' + str(max_acc_loss) + '_' + rec.filename
+        if LQ_DEBUG:
+            self.resume_param_filename = 'DEBUG_' + self.resume_param_filename
 
         if resume_param_path is None:
             input_length = [len(self.input[layer]) for layer in range(len(self.input))]
             self.resume_rec = LayerQuantResumeRec(len(self.input), input_length, max_acc_loss, self.input)
         else:
             self.resume_rec = load_from_file(resume_param_path, path='')
-        self.resume_rec.mock_reset()
         
     def number_of_iters(self):
         no_of_patterns = [len(self.input[l_idx]) for l_idx in range(len(self.input))]
@@ -123,9 +123,14 @@ class LayerQuantizier():
             self._update_layer( l_idx, p_idx)
                 
         nn.net.strict_mask_update(update_ids=list(range(len(self.layers_layout))), masks=self.sp_list)
-        _, test_acc, _ = nn.test(test_gen)
-        ops_saved, ops_total = nn.net.num_ops()
-        nn.net.reset_ops()
+        if LQ_DEBUG:
+            test_acc = 100
+            ops_saved = 100
+            ops_total = 100
+        else:
+            _, test_acc, _ = nn.test(test_gen)
+            ops_saved, ops_total = nn.net.num_ops()
+            nn.net.reset_ops()
         self.save_state(test_acc, ops_saved, ops_total)
 
         counter = 1
@@ -134,9 +139,14 @@ class LayerQuantizier():
             self._update_layer(l_to_inc, self.resume_rec.resume_index[l_to_inc])
 
             nn.net.lazy_mask_update(update_ids=[l_to_inc], masks=[self.sp_list[l_to_inc]])
-            _, test_acc, _ = nn.test(test_gen)
-            ops_saved, ops_total = nn.net.num_ops()
-            nn.net.reset_ops()
+            if LQ_DEBUG:
+                test_acc = 100
+                ops_saved = 100
+                ops_total = 100
+            else:
+                _, test_acc, _ = nn.test(test_gen)
+                ops_saved, ops_total = nn.net.num_ops()
+                nn.net.reset_ops()
             self.save_state(test_acc, ops_saved, ops_total)
             l_to_inc = self._get_next_opt()
             counter += 1
@@ -188,46 +198,79 @@ class LayerQuantizier():
         save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
         return f_rec
 
-    def _get_next_opt(self):
+    def _get_next_opt(self, nn=None, test_gen=None, curr_acc=None):
         possible_layers = []
+        current_sum_ops_saved = self._current_sum_ops_saved()
         for layer,opt_idx in enumerate(self.resume_rec.resume_index):
-            if opt_idx+1 < (len(self.input[layer])-1):
+            if cfg.TWO_STAGE and opt_idx+1 < (len(self.input[layer])-1):
+                possible_layers.append(layer)
+            elif not cfg.TWO_STAGE and opt_idx+1 < len(self.input[layer]):
                 possible_layers.append(layer)
         if len(possible_layers) > 0 :
             test_arr = [None]*len(possible_layers)
             for idx, layer in enumerate(possible_layers):
                 i = self.resume_rec.resume_index[layer]
-                #ops_diff = 10*100*(self.input[l][i-1][1]-self.input[l][i][1]+1)/self.total_ops 
                 acc_diff = self.input[layer][i+1][2]-self.input[layer][i][2]
-                ops_diff = 100*((self.input[layer][i][1]-self.input[layer][i+1][1]+1)/self.total_ops) 
-                #ops_diff = self.input[layer][i][1]-self.input[layer][i+1][1]
-                
+                if cfg.LQ_OPTION==3:
+                    ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
+                    if acc_diff == 0:
+                        acc_diff = 1
+                if cfg.LQ_OPTION==6:
+                    ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
+                    if acc_diff <= 0:
+                        acc_diff = 1
+                elif cfg.LQ_OPTION==4:
+                    ops_diff = 100*((self.input[layer][i][1]-self.input[layer][i+1][1]+1)/self.total_ops) 
+                elif cfg.LQ_OPTION==5:
+                    ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
+                elif cfg.LQ_OPTION==2:
+                    ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
+                    acc_diff = 1
+                elif cfg.LQ_OPTION==1:
+                    ops_diff = 100*(self.input[layer][i][1]/self.input[layer][i][3]-self.input[layer][i+1][1]/self.input[layer][i+1][3])+0.0001
+                    
                 self.resume_rec.add_next_idx(acc_diff,ops_diff)
 
                 test_arr[idx] = (1/(ops_diff))*acc_diff
 
             idx_to_inc = max(reversed(range(len(test_arr))), key=test_arr.__getitem__)
             l_to_inc = possible_layers[idx_to_inc]
-        else:
+            
+        elif cfg.TWO_STAGE:
             l_to_inc = self.resume_rec.find_first_unfinished_layer(should_mark=True)
+        else:
+            l_to_inc = None
         
         if l_to_inc is not None:
             self.resume_rec.resume_index[l_to_inc] = self.resume_rec.resume_index[l_to_inc]+1
+            if cfg.TWO_STAGE and (len(self.input[layer])-1)==self.resume_rec.resume_index[l_to_inc]:
+                self.resume_rec.mark_finished(layer=l_to_inc)
 
         return l_to_inc
+    
+    def _next_sum_ops_saved(self, l, curr_sum):
+        sum_ops_saved = curr_sum - self.input[l][self.resume_rec.resume_index[l]][1]
+        sum_ops_saved += self.input[l][self.resume_rec.resume_index[l]+1][1]
+        return sum_ops_saved
+    
+    def _current_sum_ops_saved(self):
+        sum_ops_saved = 0 
+        for l, i in enumerate(self.resume_rec.resume_index):
+            sum_ops_saved += self.input[l][i][1]
+        return sum_ops_saved
 
-    def _clean_input(self):
-        for l in range(len(self.input)):
-            self.curr_acc_th = 0
-            self.input[l][:] = [tup for tup in self.input[l] if self._determine(tup)]
-        del self.curr_acc_th
-
-    def _determine(self, tup):
-        p_idx, ops_saved, acc = tup
-        if ops_saved == 0 and p_idx != -1:
-            return False
-        elif self.curr_acc_th >= acc and acc > 0:
-            return False
-        else:
-            self.curr_acc_th = acc
-        return True
+#    def _clean_input(self):
+#        for l in range(len(self.input)):
+#            self.curr_acc_th = 0
+#            self.input[l][:] = [tup for tup in self.input[l] if self._determine(tup)]
+#        del self.curr_acc_th
+#
+#    def _determine(self, tup):
+#        p_idx, ops_saved, acc = tup
+#        if ops_saved == 0 and p_idx != -1:
+#            return False
+#        elif self.curr_acc_th >= acc and acc > 0:
+#            return False
+#        else:
+#            self.curr_acc_th = acc
+#        return True

@@ -322,7 +322,7 @@ class Record():
                 for patch_idx in range(self.no_of_patches[layer]):
                     for pattern_idx in range(self.no_of_patterns[layer]):
                         if self.results[layer][channel][patch_idx][pattern_idx] is None:
-                            self.results[layer][channel][patch_idx][pattern_idx] = (-1, 0, self.init_acc)
+                            self.results[layer][channel][patch_idx][pattern_idx] = (0, 100, self.init_acc)
 
     def is_full(self):
         return None == self.find_resume_point()
@@ -360,22 +360,35 @@ class Record():
                             #patch.append((p_idx,res_tuple[0],res_tuple[2]))
                             patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
                             #patch.append((p_idx,100*(res_tuple[0]/(res_tuple[1]+1)),res_tuple[2]))
-                    patch.append((-1, 0, self.init_acc))
+                    patch.append((-1, 0, self.init_acc,100))
                     channel.append(patch)
                 layer.append(channel)
             slresults.append(layer)
         return slresults
-
-
-# def _indexed_according_to_mode(self,layer, channel, patch_idx, pattern_idx):
-#        if self.mode == uniform_filters:
-#            channel = 0
-#        elif self.mode == uniform_patch:
-#            patch_idx = 0
-#        elif self.mode == uniform_layer:
-#            channel = 0
-#            patch_idx = 0
-#        return layer, channel, patch_idx, pattern_idx
+    
+    def gen_results_sort_by_acc(self, min_acc):
+        '''
+        
+        '''
+        assert self.is_full(), "Error! Not all results recorded!"
+        slresults = []
+        for l in range(self.no_of_layers):
+            layer = []
+            for k in range(self.no_of_channels[l]):
+                channel = []
+                for j in range(self.no_of_patches[l]):
+                    patch = []
+                    for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),
+                                                   key=lambda x: (x[1][2], x[1][0]), reverse=True):
+                        if res_tuple[2] >= min_acc:
+                            #patch.append((p_idx,res_tuple[0],res_tuple[2]))
+                            patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
+                            #patch.append((p_idx,100*(res_tuple[0]/(res_tuple[1]+1)),res_tuple[2]))
+                    patch.append((-1, 0, self.init_acc,100))
+                    channel.append(patch)
+                layer.append(channel)
+            slresults.append(layer)
+        return slresults
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               Final Result Record Class
@@ -383,7 +396,14 @@ class Record():
 class FinalResultRc():
     def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern, ps, max_acc_loss,
                  ones_range, net_name, dataset_name, layers_layout):
-        self.filename = f'FR_{net_name}_{dataset_name}_acc{init_acc}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
+        quant_name = f'LQ{cfg.LQ_OPTION}'
+        if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
+            quant_name += f'_CQ{cfg.CQ_OPTION}r{cfg.CHANNELQ_UPDATE_RATIO}'
+        if mode == Mode.UNIFORM_FILTERS or mode == Mode.MAX_GRANULARITY:
+            quant_name += f'_PQ{cfg.PQ_OPTION}r{cfg.PATCHQ_UPDATE_RATIO}'
+        self.filename = f'FR_{net_name}_{dataset_name}_acc{init_acc}_{quant_name}'
+        self.filename+= f'_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_'
+        self.filename+= f'{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
         self.ops_saved = ops_saved
@@ -396,6 +416,8 @@ class FinalResultRc():
         self.dataset_name = dataset_name
         self.init_acc = init_acc
         self.layers_layout = layers_layout
+        self.pQ_ratio = cfg.PATCHQ_UPDATE_RATIO
+        self.cQ_ratio = cfg.CHANNELQ_UPDATE_RATIO
 
     def __str__(self):
         string = "================================================================\n"
@@ -405,6 +427,8 @@ class FinalResultRc():
         string += "                {:>15} {}\n".format("PATCH SIZE:", self.patch_size)
         string += "                {:>15} {}-{}\n".format("ONES:", self.ones_range[0], self.ones_range[1] - 1)
         string += "                {:>15} {}\n".format("MAX ACC LOSS:", self.max_acc_loss)
+        string += "                {:>15} {}\n".format("CHANNELQ UPDATE RATIO:", self.cQ_ratio)
+        string += "                {:>15} {}\n".format("PATCHQ UPDATE RATIO:", self.pQ_ratio)
         string += "----------------------------------------------------------------\n"
         string += f"           operations saved: {round((self.ops_saved/self.total_ops)*100, 3)}%\n"
         string += f"           with accuracy of: {self.final_acc}%\n"

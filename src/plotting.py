@@ -83,7 +83,7 @@ def plot_ops_saved_vs_ones(net_name, dataset_name, ps, ones_possibilities, gran_
               f'{net_name}, {dataset_name}, INITIAL ACC:{init_acc} \n'
               f'PATCH SIZE:{ps}, MAX ACC LOSS:{acc_loss}, GRANULARITY:{gran_thresh}')
     plt.legend()
-    plt.savefig(f'{cfg.RESULTS_DIR}ops_saved_vs_number_of_ones_{net_name}_{dataset_name}' +
+    plt.savefig(f'{cfg.RESULTS_DIR}/ops_saved_vs_number_of_ones_{net_name}_{dataset_name}' +
                 f'acc{init_acc}_ps{ps}_ma{acc_loss}_mg{gran_thresh}.pdf')
 
 
@@ -115,12 +115,14 @@ def plot_ops_saved_vs_max_acc_loss(net_name, dataset_name, ps, ones_range, gran_
         title = ''
     plt.title(f'Operations Saved vs Maximun Allowed Accuracy Loss {title}\n'
               f'{net_name}, {dataset_name}, INITIAL ACC:{init_acc} \n'
-              f'PATCH SIZE:{ps}, ONES:{ones_range[0]}-{ones_range[1]-1}, GRANULARITY:{gran_thresh}')
+              f'PATCH SIZE:{ps}, ONES:{ones_range[0]}-{ones_range[1]-1}, GRANULARITY:{gran_thresh}\n'
+              f'LQ{cfg.LQ_OPTION}, CQ{cfg.CQ_OPTION}r{cfg.CHANNELQ_UPDATE_RATIO}, PQ{cfg.PQ_OPTION}r{cfg.PATCHQ_UPDATE_RATIO}')
 
     plt.legend()
     # plt.show()
-    plt.savefig(f'{cfg.RESULTS_DIR}ops_saved_vs_max_acc_loss_{net_name}_{dataset_name}' +
-                f'acc{init_acc}_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_mg{gran_thresh}.pdf')
+    plt.savefig(f'{cfg.RESULTS_DIR}/ops_saved_vs_max_acc_loss_{net_name}_{dataset_name}_acc{init_acc}_' +
+                f'LQ{cfg.LQ_OPTION}_CQ{cfg.CQ_OPTION}r{cfg.CHANNELQ_UPDATE_RATIO}_PQ{cfg.PQ_OPTION}r{cfg.PATCHQ_UPDATE_RATIO}_' +
+                f'ps{ps}_ones{ones_range[0]}x{ones_range[1]}_mg{gran_thresh}.pdf')
 
 
 def show_channel(layer, channel, dims, image, ps, filename=None):

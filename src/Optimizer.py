@@ -21,13 +21,22 @@ import maskfactory as mf
 import Config as cfg
 from Config import DATA as dat
 
+#for debugging
+INNAS_COMP = False
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
 class Optimizer:
     def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc=None, test_size=cfg.TEST_SET_SIZE):
+        self.ps = patch_size
+        self.max_acc_loss = max_acc_loss
+        self.gran_thresh = gran_thresh
+        self.ones_range = ones_range
+        self.full_net_run_time = None
+        self.total_ops = None
+        
         self.nn = NeuralNet()
-
+        self.nn.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, self.ps)
         self.test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
         self.test_set_size = cfg.TEST_SET_SIZE
         if init_acc is None:
@@ -38,12 +47,7 @@ class Optimizer:
             self.init_acc = init_acc
         self.record_finder = RecordFinder(cfg.NET.__name__, dat.name(), patch_size, ones_range, gran_thresh,
                                           max_acc_loss, self.init_acc)
-        self.ps = patch_size
-        self.max_acc_loss = max_acc_loss
-        self.gran_thresh = gran_thresh
-        self.ones_range = ones_range
-        self.full_net_run_time = None
-        self.total_ops = None
+        
         
     def plot_ops_saved_accuracy_uniform_network(self):
         layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
@@ -76,7 +80,7 @@ class Optimizer:
         plt.ylabel('accuracy [%]') 
         plt.title(f'accuracy for uniform network, patch_size:{self.ps}')
         
-        plt.savefig(f'{cfg.RESULTS_DIR}baseline_all_patterns_{cfg.NET.__name__}_{cfg.DATA_NAME}'+
+        plt.savefig(f'{cfg.RESULTS_DIR}/baseline_all_patterns_{cfg.NET.__name__}_{cfg.DATA_NAME}'+
                     f'acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_mg{self.gran_thresh}.pdf')
         
 
@@ -312,11 +316,4 @@ class Optimizer:
         return rcs
 
     def _init_nn(self):
-        # TODO - Remove this
-        self.nn.net.disable_spatial_layers(list(range(len(self.nn.net.generate_spatial_sizes(dat.shape())))))
-        # TODO  move this to __init__ if this function is removed
-        self.nn.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, self.ps)
-        _, test_acc, correct = self.nn.test(self.test_gen)
-        print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
         self.nn.net.reset_spatial()
-        assert test_acc == self.init_acc, f'starting accuracy does not match! curr_acc:{test_acc}, prev_acc{self.init_acc}'
