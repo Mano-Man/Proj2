@@ -9,7 +9,7 @@ class AlexNetS(SpatialNet):
     def __init__(self,device, output_channels, input_channels,data_shape):
         super().__init__(device)
 
-        if data_shape[1] <= 32:
+        if data_shape[1] <= 64:
             using_small = True
             params = [5,2,2,2]
         else:

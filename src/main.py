@@ -39,7 +39,7 @@ def main():
     optim.by_uniform_filters()
     optim.by_uniform_patches()
     optim.by_max_granularity()
-            
+
 def run_all_acc_loss_possibilities(ps, ones_range, gran_th, mode=None, acc_loss_opts=ACC_LOSS_OPTS):
     for acc_loss in acc_loss_opts:
         optim = Optimizer(ps, ones_range, gran_th, acc_loss)
@@ -93,13 +93,14 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 
 
 def training():
+    # dat.data_summary(show_sample=True)
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
     nn.summary(dat.shape())
     nn.train(epochs=50, lr=0.1)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
-    
+
 
 
 
@@ -144,7 +145,8 @@ def info_tutorial():
     # Turns on 3 ids and turns off all others
     chosen_victims = random.sample(range(nn.net.num_spatial_layers()), 4)
     nn.net.strict_mask_update(update_ids=chosen_victims[0:3],
-                              masks=[torch.zeros(p_spat_sizes[chosen_victims[0]]), torch.zeros(p_spat_sizes[chosen_victims[1]]),
+                              masks=[torch.zeros(p_spat_sizes[chosen_victims[0]]),
+                                     torch.zeros(p_spat_sizes[chosen_victims[1]]),
                                      torch.zeros(p_spat_sizes[chosen_victims[2]])])
 
     # Turns on one additional id and *does not* turn off all others
@@ -182,14 +184,13 @@ def debug_layer_q(acc_loss, regexes=None):
         rec.debug(os.path.basename(fn))
 
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                   Debug Mains
 # ----------------------------------------------------------------------------------------------------------------------
 
 def debug():
     nn1 = NeuralNet()
-    nn2 = NeuralNet()
-    nn3 = NeuralNet()
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
 
     # Test One:
@@ -231,7 +232,6 @@ def main_1x3_ones():
     run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
                                    10, acc_loss, 93.5)
-
 
 if __name__ == '__main__':
     main_2_ones_with_maxg()
