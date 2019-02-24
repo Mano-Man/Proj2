@@ -109,6 +109,7 @@ class SpatialNet(PytorchNet):
         self.sp_padded = None  # Will be set on first init of spatial layers - is a tuple
         self.x_shape = None
         self.p_size = None
+        self.clustering_indices = None # Used for clustering layers together
 
     def forward(self, x):
         # Make it abstract
@@ -215,10 +216,13 @@ class SpatialNet(PytorchNet):
             layer.set_enable(True)
 
     def generate_spatial_sizes(self, x_shape):
-        # NOTE - This returns the sizes *WITHOUT* the padding
+        # NOTE - This returns the sizes *WITHOUT* the padding and wit
         if self.sp is None or self.x_shape != tuple(x_shape):  # Spatial layers were not init or new dataset
             summary = self.summary(x_shape, print_it=False)
             sp = tuple(tuple(value['input_shape'][1:]) for key, value in summary.items() if key.startswith('Spatial'))
+
+            if self.clustering_indices is not None:
+                sp = tuple([sp[i] for i in self.clustering_indices])
             return sp
         else:
             return self.sp

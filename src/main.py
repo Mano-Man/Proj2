@@ -122,7 +122,7 @@ def info_tutorial():
     # Spatial Operations, defined one the net itself. Remember that after enabling a layer, ops are affected
     assert nn.net.num_spatial_layers() != 0
     nn.net.print_spatial_status()
-    nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
+    # nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
     nn.net.print_ops_summary()
     print(nn.net.num_ops())  # (ops_saved, total_ops)
 
@@ -235,7 +235,7 @@ def main_1x3_ones():
 
 
 if __name__ == '__main__':
-    main_2_ones_with_maxg()
+    info_tutorial()
 
 # if __name__ == '__main__': training()
     # eval_baseline_and_runtimes(2,(1,3),10)
