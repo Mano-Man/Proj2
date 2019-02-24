@@ -41,12 +41,13 @@ class NeuralNet:
         # Build Model:
         print(f'==> Building model {net.__name__} on the dataset {dat.name()}')
         self.net = net(self.device, dat.num_classes(), dat.input_channels(), dat.shape())
+        print(f'==> Detected Family Model of {self.net.family_name()}')
 
         if resume:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
             assert os.path.isdir(cfg.CHECKPOINT_DIR), 'Error: no checkpoint directory found!'
 
-            ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD]()
+            ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD](self.net.family_name())
             if ck_file is None:
                 print(f'-E- Found no valid checkpoints for {net.__name__} on {dat.name()}')
                 self.best_val_acc = 0
@@ -145,11 +146,11 @@ class NeuralNet:
         # Decide on whether to checkpoint or not:
         save_it = val_acc > self.best_val_acc
         if save_it and cfg.DONT_SAVE_REDUNDANT:
-            target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.__name__}_{dat.name()}_*_ckpt.t7')
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.family_name()}_{dat.name()}_*_ckpt.t7')
             checkpoints = [os.path.basename(f) for f in glob.glob(target)]
             if checkpoints:
                 best_cp_val_acc = max(
-                    [float(f.replace(f'{net.__name__}_{dat.name()}', '').split('_')[1]) for f in checkpoints])
+                    [float(f.replace(f'{net.family_name()}_{dat.name()}', '').split('_')[1]) for f in checkpoints])
                 if best_cp_val_acc >= val_acc:
                     save_it = False
                     print(f'\nResuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
@@ -166,7 +167,7 @@ class NeuralNet:
             if not os.path.isdir(cfg.CHECKPOINT_DIR):
                 os.mkdir(cfg.CHECKPOINT_DIR)
 
-            cp_name = f'{net.__name__}_{dat.name()}_{val_acc}_ckpt.t7'
+            cp_name = f'{net.family_name()}_{dat.name()}_{val_acc}_ckpt.t7'
             torch.save(state, os.path.join(cfg.CHECKPOINT_DIR, cp_name))
             self.best_val_acc = val_acc
 
@@ -229,20 +230,20 @@ class NeuralNet:
         self.net.load_state_dict(curr_dict)
 
     @staticmethod
-    def _find_top_val_acc_checkpoint():
+    def _find_top_val_acc_checkpoint(family_name):
 
-        target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.__name__}_{dat.name()}_*_ckpt.t7')
+        target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt.t7')
         checkpoints = [os.path.basename(f) for f in glob.glob(target)]
         if not checkpoints:
             return None
         else:
-            checkpoints.sort(key=lambda x: float(x.replace(f'{net.__name__}_{dat.name()}', '').split('_')[1]))
+            checkpoints.sort(key=lambda x: float(x.replace(f'{family_name}_{dat.name()}', '').split('_')[1]))
             # print(checkpoints)
             return os.path.join(cfg.CHECKPOINT_DIR, checkpoints[-1])
 
     @staticmethod
-    def _find_latest_checkpoint():
-        target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.__name__}_{dat.name()}_*_ckpt.t7')
+    def _find_latest_checkpoint(family_name):
+        target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt.t7')
         checkpoints = glob.glob(target)
         if not checkpoints:
             return None

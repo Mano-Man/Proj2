@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as tf
+import numpy as np
 from .SpatialNet import Spatial, SpatialNet
 
 NORMAL = 0
@@ -16,10 +17,10 @@ UNI_CLUSTER = 2
 def ResNet18Spatial(device, output_channels, input_channels, data_shape): # 17 Spatial Layers
     return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape,NORMAL)
 
-def ResNet18SpatialUniBlock(device, output_channels, input_channels, data_shape): # 8 Spatial Layers
+def ResNet18SpatialUniBlock(device, output_channels, input_channels, data_shape): # 5 Spatial Layers
     return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape,UNI_BLOCK)
 
-def ResNet18SpatialUniCluster(device, output_channels, input_channels, data_shape): # 5 Spatial Layers
+def ResNet18SpatialUniCluster(device, output_channels, input_channels, data_shape): # 8 Spatial Layers
     return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape,UNI_CLUSTER)
 
 
@@ -33,7 +34,7 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, in_planes, planes, stride=1):
-        super(BasicBlock, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
@@ -58,7 +59,7 @@ class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, in_planes, planes, stride=1):
-        super(Bottleneck, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
@@ -121,7 +122,7 @@ class BasicBlockS(BasicBlock):
 class ResNetS(SpatialNet):
     def __init__(self, block, blocks_per_layer, device, output_channels, input_channels, data_shape,spat_cfg):
         super().__init__(device)
-
+        self.fam_name = f'ResNet{int(np.prod(blocks_per_layer))+2}'
         # ResNet Definitions:
         self.in_planes = 64
         self.blocks_per_layer = blocks_per_layer
@@ -151,11 +152,12 @@ class ResNetS(SpatialNet):
         for layer in (self.layer1, self.layer2, self.layer3, self.layer4):
             for block in layer:
                 self.spatial_layers.extend(block.spatial_layers())
-                if self.spat_cfg==UNI_CLUSTER: #Take only first instance
+                if self.spat_cfg==UNI_BLOCK: #Take only first instance
                     break
 
 
     def forward(self, x):
+        # print('Start')
         out = self.conv1(x)
         out = self.bn1(out)
         out = tf.relu(out)
@@ -167,6 +169,7 @@ class ResNetS(SpatialNet):
         out = tf.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
+        # print('Done')
         return out
 
     def _populate_block(self, block, planes, num_blocks, stride):
@@ -176,11 +179,11 @@ class ResNetS(SpatialNet):
         spat_layers_per_block = block.num_sp()
 
 
-        if self.spat_cfg == UNI_CLUSTER:
+        if self.spat_cfg == UNI_BLOCK:
             spat = Spatial(planes)
             # Take only one
             self.clustering_indices.append(self.clustering_index)
-        elif self.spat_cfg == UNI_BLOCK:
+        elif self.spat_cfg == UNI_CLUSTER:
             spat = None
             beg = self.clustering_index
             end = self.clustering_index+spat_layers_per_block+1
@@ -194,8 +197,8 @@ class ResNetS(SpatialNet):
         self.clustering_index+=num_blocks*spat_layers_per_block
 
         for stride in strides:
-            if self.spat_cfg == UNI_BLOCK:
-                # For UniBlock case - create new player
+            if self.spat_cfg == UNI_CLUSTER:
+                # For UniBlock case - create a layer for the current cluster
                 spat = Spatial(planes)
 
             layers.append(block(self.in_planes, planes, stride, pred1=spat, pred2=spat))
@@ -209,7 +212,7 @@ class ResNetS(SpatialNet):
 
 class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10):
-        super(ResNet, self).__init__()
+        super().__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)

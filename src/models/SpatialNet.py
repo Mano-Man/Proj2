@@ -69,6 +69,7 @@ class Spatial(nn.Module):
 
     def forward(self, x):
         if not self.enable:
+            # print('Layer')
             return x
 
         if self.pad_s != 0:
@@ -109,11 +110,17 @@ class SpatialNet(PytorchNet):
         self.sp_padded = None  # Will be set on first init of spatial layers - is a tuple
         self.x_shape = None
         self.p_size = None
+        self.fam_name = None
         self.clustering_indices = None # Used for clustering layers together
 
     def forward(self, x):
         # Make it abstract
         raise NotImplementedError
+
+    def family_name(self):
+        # Abstract
+        assert self.fam_name is not None # Needs to be calculated
+        return self.fam_name
 
     def reset_spatial(self):
         for sp in self.spatial_layers:
@@ -231,7 +238,8 @@ class SpatialNet(PytorchNet):
 
         if self.sp_padded is None or self.p_size != p_size or self.x_shape != x_shape:
             sp_padded = []
-            for param in self.generate_spatial_sizes(x_shape):
+            sps = self.generate_spatial_sizes(x_shape)
+            for param in sps:
                 pad_s = param[1] % p_size
                 if pad_s != 0:
                     pad_s = p_size - pad_s
