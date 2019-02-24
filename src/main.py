@@ -198,30 +198,46 @@ def debug():
     nn1.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
     nn1.test(test_gen, print_it=True)
 
-    # Test Two:
+    # Test Two:\
+    nn2 = NeuralNet()
     nn2.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
     nn2.test(test_gen, print_it=True)
 
     # Test One:
+    nn3 = NeuralNet()
     nn3.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE,freeze=False)
     nn3.test(test_gen, print_it=True)
     
-def main_ones(ones_range):
+def main_ones(ones_range, acc_loss=None):
     eval_baseline_and_runtimes(2,ones_range,10)
-    acc_loss = [1, 3.5, 5]
+    if acc_loss is None:
+        acc_loss = [1, 3.5, 5]
     run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, ones_range,
                                    10, acc_loss, 93.5)
+def patch3x3():
+    ones_range = (3,4)
+    gran = 32*32
+    eval_baseline_and_runtimes(3,ones_range,gran)
+    acc_loss = [9.89]
+    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 3, ones_range,
+                                   gran, acc_loss, 93.5)
+    
+    
     
 def main_2_ones_with_maxg():
     eval_baseline_and_runtimes(2,(2,3),10)
     acc_loss = [1, 3.5, 5]
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=acc_loss)
+    
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (2,3),
                                    10, acc_loss, 93.5)
     
@@ -234,5 +250,6 @@ def main_1x3_ones():
                                    10, acc_loss, 93.5)
 
 if __name__ == '__main__':
-    main_2_ones_with_maxg()
+    main_ones((1,3))
+    #run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=[5])
 
