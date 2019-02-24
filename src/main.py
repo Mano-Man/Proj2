@@ -93,10 +93,10 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 
 
 def training():
-    # dat.data_summary(show_sample=True)
+    #dat.data_summary(show_sample=False)
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
     nn.summary(dat.shape())
-    nn.train(epochs=50, lr=0.1)
+    nn.train(epochs=50, lr=0.01)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
@@ -233,6 +233,20 @@ def main_1x3_ones():
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
                                    10, acc_loss, 93.5)
 
+
 if __name__ == '__main__':
     main_2_ones_with_maxg()
+
+# if __name__ == '__main__': training()
+    # eval_baseline_and_runtimes(2,(1,3),10)
+    # run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=[2])
+    # run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=[2])
+    # run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=[2])
+    # debug_layer_q()
+    # plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
+    #                                10, [0, 1, 2, 3, 3.5, 5, 10], 93.5)
+    #main_plot_ops_saved_vs_ones(Mode.UNIFORM_LAYER)
+
+
+
 

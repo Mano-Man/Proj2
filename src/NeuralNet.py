@@ -26,6 +26,7 @@ class NeuralNet:
 
         # Decide on device:
         if torch.cuda.is_available():
+            #print('CUDA FOUND!')
             self.device = torch.device('cuda')
             cudnn.benchmark = True
             if torch.cuda.device_count() > 1:
