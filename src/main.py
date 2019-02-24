@@ -93,10 +93,10 @@ def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
 
 
 def training():
-    # dat.data_summary(show_sample=True)
+    #dat.data_summary(show_sample=False)
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
     nn.summary(dat.shape())
-    nn.train(epochs=50, lr=0.1)
+    nn.train(epochs=50, lr=0.01)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
@@ -122,7 +122,7 @@ def info_tutorial():
     # Spatial Operations, defined one the net itself. Remember that after enabling a layer, ops are affected
     assert nn.net.num_spatial_layers() != 0
     nn.net.print_spatial_status()
-    nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
+    # nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
     nn.net.print_ops_summary()
     print(nn.net.num_ops())  # (ops_saved, total_ops)
 
@@ -249,7 +249,9 @@ def main_1x3_ones():
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
                                    10, acc_loss, 93.5)
 
+
 if __name__ == '__main__':
     main_ones((1,3))
     #run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=[5])
+
 

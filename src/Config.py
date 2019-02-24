@@ -1,5 +1,5 @@
 # Models: (There are many more)
-from models.resnet import ResNet18, ResNet18Spatial, ResNet34Spatial
+from models.resnet import ResNet18, ResNet18Spatial,ResNet18SpatialUniBlock,ResNet18SpatialUniCluster, ResNet34Spatial
 from models.alexnet import AlexNetS
 from util.datasets import Datasets
 import os
@@ -22,8 +22,8 @@ DATASET_DIR = os.path.join(basedir, 'datasets')
 #                                                 Global Config
 # ----------------------------------------------------------------------------------------------------------------------
 # Global Adjustments:
-NETS = [ResNet18, ResNet18Spatial, ResNet34Spatial, AlexNetS]
-NET = NETS[1]  # The chosen network
+NETS = [ResNet18, ResNet18Spatial,ResNet18SpatialUniBlock,ResNet18SpatialUniCluster, ResNet34Spatial, AlexNetS]
+NET = NETS[2]  # The chosen network
 
 #print(Datasets.which()) #('MNIST', 'CIFAR10', 'ImageNet', 'TinyImageNet', 'STL10', 'FashionMNIST')
 DATA = Datasets.get('CIFAR10',DATASET_DIR)

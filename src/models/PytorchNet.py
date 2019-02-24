@@ -15,12 +15,15 @@ class PytorchNet(nn.Module):
         self.device = device
         self.use_cuda = True if (str(self.device) == "cuda" and torch.cuda.is_available()) else False
 
+    def family_name(self):
+        return self.__class__.__name__
+
     def forward(self, x):
         # Make it abstract
         raise NotImplementedError
 
     def summary(self, x_shape, batch_size=-1, print_it=True):
-
+        print('Summary has been called')
         def register_hook(module):
 
             def hook(module, input, output):
@@ -48,7 +51,7 @@ class PytorchNet(nn.Module):
                 summary[m_key]["nb_params"] = params
 
             if (not isinstance(module, nn.Sequential) and not isinstance(module, nn.ModuleList) and not (
-                    module == self)):
+                    module == self) and not (hook.__code__.co_code in [f.__code__.co_code for f in module._forward_hooks.values()])):
                 hooks.append(module.register_forward_hook(hook))
 
         if self.use_cuda:
