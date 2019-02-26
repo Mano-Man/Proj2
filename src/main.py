@@ -42,10 +42,9 @@ def training(lr=0.01, epochs=50,batch_size_override=cfg.BATCH_SIZE):
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
 def test():
-    nn = NeuralNet(resume=True)
+    nn = NeuralNet()
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
-    test_loss, test_acc, count = nn.test(test_gen,print_it=True)
-    # print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
+    nn.test(test_gen,print_it=True)
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                   Tutorials

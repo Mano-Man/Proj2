@@ -22,6 +22,9 @@ from Config import NET as net
 #
 # ----------------------------------------------------------------------------------------------------------------------
 class NeuralNet:
+    # This wrapper presumes we are dealing with a:
+    # 1. PytorchNet object
+    # 2. Input arguments to constructor are: self.device, dat.num_classes(), dat.input_channels(), dat.shape()
     def __init__(self, resume=True):
 
         # Decide on device:
