@@ -104,14 +104,15 @@ class ChannelQuantizier():
             if type(opt) is int:
                 opt = self.input[l][idx][opt]
             if opt[0] == -1:
-                layer[idx, :, :] = mf.tile_opt((layer_dims[1], layer_dims[2]),
+                tmp = mf.tile_opt((layer_dims[1], layer_dims[2]),
                                                self.default_in_pattern, False)
             elif mode == Mode.MAX_GRANULARITY:
-                layer[idx, :, :] = mf.tile_opt((layer_dims[1], layer_dims[2]),
+                tmp = mf.tile_opt((layer_dims[1], layer_dims[2]),
                                                self.input_patterns[l][idx][opt[0]], False)
             else:
-                layer[idx, :, :] = mf.tile_opt((layer_dims[1], layer_dims[2]),
+                tmp = mf.tile_opt((layer_dims[1], layer_dims[2]),
                                                self.input_patterns[:, :, opt[0]], False)
+            layer[idx, :, :] = tmp[0:layer_dims[1], 0:layer_dims[2]]
         return layer
     
     def _gen_patterns_zip_ratio(self, mode, layers_layout):
