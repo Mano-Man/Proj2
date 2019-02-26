@@ -11,21 +11,25 @@ NORMAL = 0
 UNI_BLOCK = 1
 UNI_CLUSTER = 2
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                    NN Spatial Configurations
 # ----------------------------------------------------------------------------------------------------------------------
-def ResNet18Spatial(device, output_channels, input_channels, data_shape): # 17 Spatial Layers
-    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape,NORMAL)
+def ResNet18Spatial(device, output_channels, input_channels, data_shape):  # 17 Spatial Layers
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape, NORMAL)
 
-def ResNet18SpatialUniBlock(device, output_channels, input_channels, data_shape): # 5 Spatial Layers
-    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape,UNI_BLOCK)
 
-def ResNet18SpatialUniCluster(device, output_channels, input_channels, data_shape): # 8 Spatial Layers
-    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape,UNI_CLUSTER)
+def ResNet18SpatialUniBlock(device, output_channels, input_channels, data_shape):  # 5 Spatial Layers
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape, UNI_BLOCK)
+
+
+def ResNet18SpatialUniCluster(device, output_channels, input_channels, data_shape):  # 8 Spatial Layers
+    return ResNetS(BasicBlockS, [2, 2, 2, 2], device, output_channels, input_channels, data_shape, UNI_CLUSTER)
 
 
 def ResNet34Spatial(device, output_channels, input_channels, data_shape):
-    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, output_channels, input_channels, data_shape,NORMAL)
+    return ResNetS(BasicBlockS, [3, 4, 6, 3], device, output_channels, input_channels, data_shape, NORMAL)
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                           Generic Version
@@ -81,12 +85,14 @@ class Bottleneck(nn.Module):
         out += self.shortcut(x)
         out = tf.relu(out)
         return out
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                           Expensive Spatial Version
 # ----------------------------------------------------------------------------------------------------------------------
 class BasicBlockS(BasicBlock):
 
-    def __init__(self, in_planes, planes, stride=1,pred1=None,pred2=None):
+    def __init__(self, in_planes, planes, stride=1, pred1=None, pred2=None):
         super().__init__(in_planes, planes, stride)
 
         self.is_uniform = True if pred1 is not None and pred1 == pred2 else False
@@ -119,10 +125,11 @@ class BasicBlockS(BasicBlock):
     def num_sp():
         return 2
 
+
 class ResNetS(SpatialNet):
-    def __init__(self, block, blocks_per_layer, device, output_channels, input_channels, data_shape,spat_cfg):
+    def __init__(self, block, blocks_per_layer, device, output_channels, input_channels, data_shape, spat_cfg):
         super().__init__(device)
-        self.fam_name = f'ResNet{int(np.prod(blocks_per_layer))+2}'
+        self.fam_name = f'ResNet{int(np.prod(blocks_per_layer)) + 2}'
         # ResNet Definitions:
         self.in_planes = 64
         self.blocks_per_layer = blocks_per_layer
@@ -134,7 +141,7 @@ class ResNetS(SpatialNet):
         self.pred = Spatial(self.in_planes)
 
         self.clustering_index = 1
-        self.clustering_indices = [0] # Contains first layer
+        self.clustering_indices = [0]  # Contains first layer
 
         self.layer1 = self._populate_block(block, 64, blocks_per_layer[0], stride=1)
         self.layer2 = self._populate_block(block, 128, blocks_per_layer[1], stride=2)
@@ -152,9 +159,8 @@ class ResNetS(SpatialNet):
         for layer in (self.layer1, self.layer2, self.layer3, self.layer4):
             for block in layer:
                 self.spatial_layers.extend(block.spatial_layers())
-                if self.spat_cfg==UNI_BLOCK: #Take only first instance
+                if self.spat_cfg == UNI_BLOCK:  # Take only first instance
                     break
-
 
     def forward(self, x):
         # print('Start')
@@ -178,7 +184,6 @@ class ResNetS(SpatialNet):
         layers = []
         spat_layers_per_block = block.num_sp()
 
-
         if self.spat_cfg == UNI_BLOCK:
             spat = Spatial(planes)
             # Take only one
@@ -186,15 +191,15 @@ class ResNetS(SpatialNet):
         elif self.spat_cfg == UNI_CLUSTER:
             spat = None
             beg = self.clustering_index
-            end = self.clustering_index+spat_layers_per_block
-            self.clustering_indices.extend(list(range(beg,end)))
+            end = self.clustering_index + spat_layers_per_block
+            self.clustering_indices.extend(list(range(beg, end)))
         elif self.spat_cfg == NORMAL:
             spat = None
             beg = self.clustering_index
-            end = self.clustering_index+spat_layers_per_block*num_blocks
-            self.clustering_indices.extend(list(range(beg,end)))
+            end = self.clustering_index + spat_layers_per_block * num_blocks
+            self.clustering_indices.extend(list(range(beg, end)))
 
-        self.clustering_index+=num_blocks*spat_layers_per_block
+        self.clustering_index += num_blocks * spat_layers_per_block
 
         for stride in strides:
             if self.spat_cfg == UNI_CLUSTER:
@@ -243,23 +248,23 @@ class ResNet(nn.Module):
         return out
 
 
-def ResNet18():
+def ResNet18(*_):
     return ResNet(BasicBlock, [2, 2, 2, 2])
 
 
-def ResNet34():
+def ResNet34(*_):
     return ResNet(BasicBlock, [3, 4, 6, 3])
 
 
-def ResNet50():
+def ResNet50(*_):
     return ResNet(Bottleneck, [3, 4, 6, 3])
 
 
-def ResNet101():
+def ResNet101(*_):
     return ResNet(Bottleneck, [3, 4, 23, 3])
 
 
-def ResNet152():
+def ResNet152(*_):
     return ResNet(Bottleneck, [3, 8, 36, 3])
 
 

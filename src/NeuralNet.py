@@ -116,27 +116,33 @@ class NeuralNet:
         test_loss = 0
         correct = 0
         total = 0
+        top5_count = [0]  # Add more elements here if you want more ks
         with torch.no_grad():  # TODO - Fix the odd intialize spatial layers bug
             for batch_idx, (inputs, targets) in enumerate(data_gen):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 outputs = self.net(inputs)
                 loss = self.criterion(outputs, targets)
-
                 test_loss += loss.item()
                 _, predicted = outputs.max(1)
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
 
+                # TODO - Export this out of the function - Replace the above code with a call to the following and topk=(1,5)
+                top5_count = [sum(x) for x in zip(top5_count, self._accuracy(outputs, targets,
+                                                                 topk=(5,)))]
+
                 # val_loss = f'{test_loss/(batch_idx+1):.3f}.'
                 # acc = f'{100.*correct/total:.3f}.'
                 # count = f'{correct}/{total}'
 
-        test_acc = 100. * correct / total
-        count = f'{correct}/{total}'
+        top1_acc = 100. * correct / total
+        top5_acc = 100. * top5_count[0] / total
+        top1_count = f'{correct}/{total}'
+        top5_count = f'{top5_count[0]}/{total}'
 
         if print_it:
-            print(f'==> Asserted test-acc of: {test_acc:.3f} [{count}]')
-        return test_loss, test_acc, count
+            print(f'==> Asserted Top1 test-acc of: {top1_acc:.3f}% [{top1_count}]. Top5 is {top5_acc:.3f}% [{top5_count}]')
+        return test_loss, top1_acc, top1_count
 
     def summary(self, x_size, print_it=True):
         return self.net.summary(x_size, print_it=print_it)
@@ -234,6 +240,21 @@ class NeuralNet:
         # Overwrite entries in the existing state dict
         curr_dict.update(filtered_dict)
         self.net.load_state_dict(curr_dict)
+
+    @staticmethod
+    def _accuracy(output, target, topk=(1,)):
+        """Computes the precision@k for the specified values of k"""
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        list_correct = []
+        for k in topk:
+            list_correct.append(int(correct[:k].view(-1).float().sum(0)))
+        return list_correct
 
     @staticmethod
     def _find_top_val_acc_checkpoint(family_name):

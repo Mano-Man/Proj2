@@ -41,6 +41,11 @@ def training(lr=0.01, epochs=50,batch_size_override=cfg.BATCH_SIZE):
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
+def test():
+    nn = NeuralNet(resume=True)
+    test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
+    test_loss, test_acc, count = nn.test(test_gen,print_it=True)
+    # print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                   Tutorials
@@ -227,6 +232,7 @@ def main_1x3_ones():
 
 
 if __name__ == '__main__':
-    training(lr=0.0001,batch_size_override=256)
+    # training(lr=0.0001,batch_size_override=64)
+    test()
     # main_ones((1,3))
     # run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=[5])
