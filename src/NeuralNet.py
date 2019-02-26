@@ -26,11 +26,11 @@ class NeuralNet:
 
         # Decide on device:
         if torch.cuda.is_available():
-            #print('CUDA FOUND!')
+            # print('CUDA FOUND!')
             self.device = torch.device('cuda')
             cudnn.benchmark = True
             if torch.cuda.device_count() > 1:
-                raise AssertionError
+                raise NotImplementedError
                 # This line enables multiple GPUs, but changes the layer names a bit
                 # self.net = torch.nn.DataParallel(self.net)
                 #  Useful if you have multiple GPUs - does not hurt otherwise
@@ -76,9 +76,15 @@ class NeuralNet:
 
         (self.train_gen, set_size), (self.val_gen, _) = dat.trainset(batch_size=batch_size, max_samples=set_size)
         print(f'==> Training on {set_size} samples with batch size of {batch_size} and lr = {lr}')
-        self.optimizer = optim.SGD(filter(lambda x: x.requires_grad, self.net.parameters()), lr=lr, momentum=0.9,
-                                   weight_decay=5e-4)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=5)
+
+        if cfg.SGD_METHOD == 'Nesterov':
+            self.optimizer = optim.SGD(filter(lambda x: x.requires_grad, self.net.parameters()), lr=lr, momentum=0.9,
+                                       weight_decay=5e-4)
+        elif cfg.SGD_METHOD == 'Adam':
+            self.optimizer = torch.optim.Adam(filter(lambda x: x.requires_grad, self.net.parameters()), lr=lr)
+        else:
+            raise NotImplementedError
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=cfg.N_EPOCHS_TO_WAIT_BEFORE_LR_DECAY)
 
         p = Progbar(epochs)
         t_start = time.time()
@@ -102,7 +108,7 @@ class NeuralNet:
                               ("lr", self.optimizer.param_groups[0]['lr'])])
             self._checkpoint(val_acc, epoch + 1)
         t_end = time.time()
-        print(f'==> Total train time: {t_end-t_start:.3f} secs :: per epoch: {(t_end-t_start)/epochs:.3f} secs')
+        print(f'==> Total train time: {t_end - t_start:.3f} secs :: per epoch: {(t_end - t_start) / epochs:.3f} secs')
         banner('Training Phase - End')
 
     def test(self, data_gen, print_it=False):
@@ -146,11 +152,11 @@ class NeuralNet:
         # Decide on whether to checkpoint or not:
         save_it = val_acc > self.best_val_acc
         if save_it and cfg.DONT_SAVE_REDUNDANT:
-            target = os.path.join(cfg.CHECKPOINT_DIR, f'{net.family_name()}_{dat.name()}_*_ckpt.t7')
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{self.net.family_name()}_{dat.name()}_*_ckpt.t7')
             checkpoints = [os.path.basename(f) for f in glob.glob(target)]
             if checkpoints:
                 best_cp_val_acc = max(
-                    [float(f.replace(f'{net.family_name()}_{dat.name()}', '').split('_')[1]) for f in checkpoints])
+                    [float(f.replace(f'{self.net.family_name()}_{dat.name()}', '').split('_')[1]) for f in checkpoints])
                 if best_cp_val_acc >= val_acc:
                     save_it = False
                     print(f'\nResuming without save - Found valid checkpoint with higher val_acc: {best_cp_val_acc}')
@@ -167,7 +173,7 @@ class NeuralNet:
             if not os.path.isdir(cfg.CHECKPOINT_DIR):
                 os.mkdir(cfg.CHECKPOINT_DIR)
 
-            cp_name = f'{net.family_name()}_{dat.name()}_{val_acc}_ckpt.t7'
+            cp_name = f'{self.net.family_name()}_{dat.name()}_{val_acc}_ckpt.t7'
             torch.save(state, os.path.join(cfg.CHECKPOINT_DIR, cp_name))
             self.best_val_acc = val_acc
 
