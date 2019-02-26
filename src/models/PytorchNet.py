@@ -23,7 +23,7 @@ class PytorchNet(nn.Module):
         raise NotImplementedError
 
     def summary(self, x_shape, batch_size=-1, print_it=True):
-        print('Summary has been called')
+        # print('Summary has been called')
         def register_hook(module):
 
             def hook(module, input, output):

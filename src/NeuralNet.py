@@ -41,7 +41,7 @@ class NeuralNet:
         # Build Model:
         print(f'==> Building model {net.__name__} on the dataset {dat.name()}')
         self.net = net(self.device, dat.num_classes(), dat.input_channels(), dat.shape())
-        print(f'==> Detected Family Model of {self.net.family_name()}')
+        print(f'==> Detected family model of {self.net.family_name()}')
 
         if resume:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')

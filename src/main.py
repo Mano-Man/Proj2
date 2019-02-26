@@ -134,7 +134,7 @@ def info_tutorial():
 
     # Generate a constant 1 value mask over all spatial nets
     print(nn.net.enabled_layers())
-    nn.net.fill_masks_to_val(0)
+    nn.net.fill_masks_to_val(1)
     print(nn.net.enabled_layers())
     print(nn.net.disabled_layers())
     nn.net.print_spatial_status()  # Now all are enabled, seeing the mask was set

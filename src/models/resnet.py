@@ -89,7 +89,7 @@ class BasicBlockS(BasicBlock):
     def __init__(self, in_planes, planes, stride=1,pred1=None,pred2=None):
         super().__init__(in_planes, planes, stride)
 
-        self.is_uniform = True if pred1 == pred2 else False
+        self.is_uniform = True if pred1 is not None and pred1 == pred2 else False
 
         if pred1 is None:
             self.pred1 = Spatial(planes)
@@ -186,12 +186,12 @@ class ResNetS(SpatialNet):
         elif self.spat_cfg == UNI_CLUSTER:
             spat = None
             beg = self.clustering_index
-            end = self.clustering_index+spat_layers_per_block+1
+            end = self.clustering_index+spat_layers_per_block
             self.clustering_indices.extend(list(range(beg,end)))
         elif self.spat_cfg == NORMAL:
             spat = None
             beg = self.clustering_index
-            end = self.clustering_index+spat_layers_per_block*num_blocks+1
+            end = self.clustering_index+spat_layers_per_block*num_blocks
             self.clustering_indices.extend(list(range(beg,end)))
 
         self.clustering_index+=num_blocks*spat_layers_per_block
