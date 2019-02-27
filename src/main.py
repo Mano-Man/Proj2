@@ -27,24 +27,83 @@ GRANULARITY_TH = 10
 ACC_LOSS = 2
 ACC_LOSS_OPTS = [0, 1, 3, 5, 10]
 
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#                                                       Optimization Workloads
+# ----------------------------------------------------------------------------------------------------------------------
+def main():
+    optim = Optimizer(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH, ACC_LOSS)
+    optim.base_line_result()
+    optim.by_uniform_layers()
+    optim.by_uniform_filters()
+    optim.by_uniform_patches()
+    optim.by_max_granularity()
+
+def run_all_acc_loss_possibilities(ps, ones_range, gran_th, mode=None, acc_loss_opts=ACC_LOSS_OPTS, patterns_idx=None):
+    for acc_loss in acc_loss_opts:
+        optim = Optimizer(ps, ones_range, gran_th, acc_loss)
+        optim.run_mode(mode)
+
+
+def run_all_ones_possibilities(ps, ones_possibilities, gran_th, acc_loss, mode=None):
+    for ones in ones_possibilities:
+        optim = Optimizer(ps, (ones, ones + 1), gran_th, acc_loss)
+        optim.print_runtime_eval()
+        optim.run_mode(mode)
+
+
+def eval_baseline_and_runtimes(ps, ones_range, gran_th, patterns_idx=None):
+    optim = Optimizer(ps, ones_range, gran_th, 0, patterns_idx=patterns_idx)
+    optim.base_line_result()
+    optim.print_runtime_eval()
+    return optim.init_acc
+
+
+def get_init_acc(ps, ones_range, gran_th):
+    optim = Optimizer(ps, ones_range, gran_th, 0)
+    return optim.init_acc
+
+
+def main_plot_ops_saved_vs_ones(mode):
+    ps = 3
+    ones_possibilities = range(3, 8)
+    init_acc = get_init_acc(ps, (ones_possibilities[0], ones_possibilities[1]), GRANULARITY_TH)
+    run_all_ones_possibilities(ps, ones_possibilities, GRANULARITY_TH, ACC_LOSS)
+    plotting.plot_ops_saved_vs_ones(cfg.NET.__name__, dat.name(), ps, ones_possibilities,
+                                    GRANULARITY_TH, ACC_LOSS, init_acc, mode)
+
+
+def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
+    init_acc = get_init_acc(ps, ones_range, gran_th)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_LAYER)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_FILTERS)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_PATCH)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), ps, ones_range,
+                                            gran_th, ACC_LOSS_OPTS, init_acc, title=title)
+    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.MAX_GRANULARITY)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), ps, ones_range,
+                                            gran_th, ACC_LOSS_OPTS, init_acc)
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                  Generic Workloads
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def training(lr=0.01, epochs=50,batch_size_override=cfg.BATCH_SIZE):
-    # dat.data_summary(show_sample=False)
+
+def training():
+    #dat.data_summary(show_sample=False)
     nn = NeuralNet(resume=True)  # Spatial layers are by default, disabled
     nn.summary(dat.shape())
-    nn.train(epochs=epochs, lr=lr,batch_size=batch_size_override)
+    nn.train(epochs=50, lr=0.01)
     test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
     test_loss, test_acc, count = nn.test(test_gen)
     print(f'==> Final testing results: test acc: {test_acc:.3f} with {count}, test loss: {test_loss:.3f}')
 
-def test():
-    nn = NeuralNet()
-    test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
-    nn.test(test_gen,print_it=True)
+
+
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                                   Tutorials
@@ -111,15 +170,13 @@ def data_tutorial():
                                                                         max_samples=dat.max_train_size(),
                                                                         show_sample=True)
     test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
-
-
+    
 def debug_layer_q(acc_loss, regexes=None):
     print('debuging...')
     if regexes is None:
-        regexes = [
-            f'LayerQ{cfg.LQ_OPTION}_' + f'ma{acc_loss}_PatchQ_ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_filters_ps2_ones1x3_mg10_',
-            f'LayerQ{cfg.LQ_OPTION}_' + f'ma{acc_loss}_ChannelQ_ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_patch_ps2_ones1x3_mg10_',
-            f'LayerQ{cfg.LQ_OPTION}_' + f'ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_layer_ps2_ones1x3_mg10_']
+        regexes = [f'LayerQ{cfg.LQ_OPTION}_'+f'ma{acc_loss}_PatchQ_ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_filters_ps2_ones1x3_mg10_',
+                   f'LayerQ{cfg.LQ_OPTION}_'+f'ma{acc_loss}_ChannelQ_ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_patch_ps2_ones1x3_mg10_',
+                   f'LayerQ{cfg.LQ_OPTION}_'+f'ma{acc_loss}_ResNet18Spatial_CIFAR10_acc93.5_uniform_layer_ps2_ones1x3_mg10_']
     for regex in regexes:
         print(f'{cfg.RESULTS_DIR}/{regex}*pkl')
         fn = glob.glob(f'{cfg.RESULTS_DIR}/{regex}*pkl')[0]
@@ -127,111 +184,78 @@ def debug_layer_q(acc_loss, regexes=None):
         rec.debug(os.path.basename(fn))
 
 
+
 # ----------------------------------------------------------------------------------------------------------------------
-#                                                   Optimization Mains
+#                                                   Debug Mains
 # ----------------------------------------------------------------------------------------------------------------------
 
-def main():
-    optim = Optimizer(PATCH_SIZE, RANGE_OF_ONES, GRANULARITY_TH, ACC_LOSS)
-    optim.base_line_result()
-    optim.by_uniform_layers()
-    optim.by_uniform_filters()
-    optim.by_uniform_patches()
-    optim.by_max_granularity()
+def debug():
+    nn1 = NeuralNet()
+    test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
 
+    # Test One:
+    nn1.test(test_gen, print_it=True)
+    nn1.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
+    nn1.test(test_gen, print_it=True)
 
-def run_all_acc_loss_possibilities(ps, ones_range, gran_th, mode=None, acc_loss_opts=ACC_LOSS_OPTS):
-    for acc_loss in acc_loss_opts:
-        optim = Optimizer(ps, ones_range, gran_th, acc_loss)
-        optim.run_mode(mode)
+    # Test Two:\
+    nn2 = NeuralNet()
+    nn2.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE)
+    nn2.test(test_gen, print_it=True)
 
-
-def run_all_ones_possibilities(ps, ones_possibilities, gran_th, acc_loss, mode=None):
-    for ones in ones_possibilities:
-        optim = Optimizer(ps, (ones, ones + 1), gran_th, acc_loss)
-        optim.print_runtime_eval()
-        optim.run_mode(mode)
-
-
-def eval_baseline_and_runtimes(ps, ones_range, gran_th):
-    optim = Optimizer(ps, ones_range, gran_th, 0)
-    optim.base_line_result()
-    optim.print_runtime_eval()
-    return optim.init_acc
-
-
-def get_init_acc(ps, ones_range, gran_th):
-    optim = Optimizer(ps, ones_range, gran_th, 0)
-    return optim.init_acc
-
-
-def main_plot_ops_saved_vs_ones(mode):
-    ps = 3
-    ones_possibilities = range(3, 8)
-    init_acc = get_init_acc(ps, (ones_possibilities[0], ones_possibilities[1]), GRANULARITY_TH)
-    run_all_ones_possibilities(ps, ones_possibilities, GRANULARITY_TH, ACC_LOSS)
-    plotting.plot_ops_saved_vs_ones(cfg.NET.__name__, dat.name(), ps, ones_possibilities,
-                                    GRANULARITY_TH, ACC_LOSS, init_acc, mode)
-
-
-def main_plot_ops_saved_vs_max_acc_loss(ps, ones_range, gran_th, title=None):
-    init_acc = get_init_acc(ps, ones_range, gran_th)
-    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_LAYER)
-    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_FILTERS)
-    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.UNIFORM_PATCH)
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), ps, ones_range,
-                                            gran_th, ACC_LOSS_OPTS, init_acc, title=title)
-    run_all_acc_loss_possibilities(ps, ones_range, gran_th, Mode.MAX_GRANULARITY)
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), ps, ones_range,
-                                            gran_th, ACC_LOSS_OPTS, init_acc)
-
-
+    # Test One:
+    nn3 = NeuralNet()
+    nn3.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, PATCH_SIZE,freeze=False)
+    nn3.test(test_gen, print_it=True)
+    
 def main_ones(ones_range, acc_loss=None):
-    eval_baseline_and_runtimes(2, ones_range, 10)
+    eval_baseline_and_runtimes(2,ones_range,10)
     if acc_loss is None:
         acc_loss = [1, 3.5, 5]
     run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
     run_all_acc_loss_possibilities(2, ones_range, 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, ones_range,
-                                            10, acc_loss, 93.5)
-
-
-def patch3x3():
-    ones_range = (3, 4)
-    gran = 32 * 32
-    eval_baseline_and_runtimes(3, ones_range, gran)
-    acc_loss = [9.89]
-    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+                                   10, acc_loss, 93.5)
+def patch3x3(patterns_idx):
+    ones_range = (patterns_idx,patterns_idx+1)
+    gran = 10
+    eval_baseline_and_runtimes(3,ones_range,gran, patterns_idx=patterns_idx)
+    acc_loss = [10]
+    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss, patterns_idx=patterns_idx)
+    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss, patterns_idx=patterns_idx)
+    run_all_acc_loss_possibilities(3, ones_range, gran, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss, patterns_idx=patterns_idx)
     plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 3, ones_range,
-                                            gran, acc_loss, 93.5)
-
-
+                                   gran, acc_loss, 93.5)
+    
+    
+    
 def main_2_ones_with_maxg():
-    eval_baseline_and_runtimes(2, (2, 3), 10)
+    eval_baseline_and_runtimes(2,(2,3),10)
     acc_loss = [1, 3.5, 5]
-    run_all_acc_loss_possibilities(2, (2, 3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(2, (2, 3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(2, (2, 3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(2, (2, 3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
-
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (2, 3),
-                                            10, acc_loss, 93.5)
-
-
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (2,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
+    
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (2,3),
+                                   10, acc_loss, 93.5)
+    
 def main_1x3_ones():
     acc_loss = [3.5]
-    run_all_acc_loss_possibilities(2, (1, 3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(2, (1, 3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
-    run_all_acc_loss_possibilities(2, (1, 3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
-    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1, 3),
-                                            10, acc_loss, 93.5)
+    eval_baseline_and_runtimes(2, (1,3), 10)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_LAYER, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=acc_loss)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.UNIFORM_FILTERS, acc_loss_opts=acc_loss)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
+                                   10, acc_loss, 93.5)
+    run_all_acc_loss_possibilities(2, (1,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=acc_loss)
+    plotting.plot_ops_saved_vs_max_acc_loss(cfg.NET.__name__, dat.name(), 2, (1,3),
+                                   10, acc_loss, 93.5)
 
 
 if __name__ == '__main__':
-    # training(lr=0.0001,batch_size_override=64)
-    test()
-    # main_ones((1,3))
-    # run_all_acc_loss_possibilities(2, (2,3), 10, Mode.MAX_GRANULARITY, acc_loss_opts=[5])
+    patch3x3(20)
+    #main_1x3_ones()
+
+

@@ -187,11 +187,23 @@ class Record():
         self.is_initialized = False
         self.init_acc = initial_acc
 
-        if gen_patches:
+        if not gen_patches and len(argv)==0:
+            self.all_patterns = None
+            self.no_of_layers = None
+            self.no_of_channels = None
+            self.no_of_patches = None
+            self.no_of_patterns = None
+            self.filename = None
+            self.rec_type = None
+            self.patch_sizes = None            
+        else:
+            if gen_patches:
+                self.all_patterns = all_patches_array(argv[0], argv[1])  # [patch_size, ones_range]
+            else:
+                self.all_patterns = argv[0] # argv [patterns, ones_range]
+
             self.no_of_layers = len(layers_layout)
             self.no_of_channels = [l[0] for l in layers_layout]
-            self.all_patterns = all_patches_array(argv[0], argv[1])  # [patch_size, ones_range]
-
             patch_size = self.all_patterns.shape[0]
             if mode == Mode.MAX_GRANULARITY:
                 self.patch_sizes = [actual_patch_size(l[1], l[2], patch_size, gran_thresh) for l in layers_layout]
@@ -216,15 +228,10 @@ class Record():
                              f'_{gran_dict[self.mode]}_ps{argv[0]}_ones{argv[1][0]}x{argv[1][1]}'
                              f'_mg{round(gran_thresh,0)}_{int(time.time())}')
             self._create_results()
-        else:
-            self.all_patterns = None
-            self.no_of_layers = None
-            self.no_of_channels = None
-            self.no_of_patches = None
-            self.no_of_patterns = None
-            self.filename = None
-            self.rec_type = None
-            self.patch_sizes = None
+            
+            
+
+        
 
     def set_results_dimensions(self, no_of_layers=None, no_of_channels=None, no_of_patches=None,
                                no_of_patterns=None, patch_sizes=None):

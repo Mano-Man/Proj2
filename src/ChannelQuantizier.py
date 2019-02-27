@@ -29,6 +29,8 @@ class ChannelQuantizier():
         for l in range(len(self.input)):
             input_new.append([self.input[l][c][0] for c in range(rec.layers_layout[l][0])])
         self.input = input_new
+        if cfg.CQ_OPTION == 2:
+            self._clean_input()
 
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
@@ -184,3 +186,15 @@ class ChannelQuantizier():
             no_of_patterns[l] = len(layers)
             all_patterns.append(layers)
         return no_of_patterns, all_patterns
+    
+    def _clean_input(self):
+        for l in range(len(self.input)):
+            for c in range(len(self.input[l])):
+                self.input[l][c][:] = [tup for tup in self.input[l][c] if self._determine(tup)]
+
+
+    def _determine(self, tup):
+        p_idx, ops_saved, acc, tot_ops = tup
+        if ops_saved == 0 and p_idx != -1:
+            return False
+        return True

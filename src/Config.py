@@ -38,8 +38,8 @@ PATCHQ_UPDATE_RATIO = 1
 
 # for future debuging...
 TWO_STAGE = True
-LQ_OPTION = 5
-CQ_OPTION = 1
+LQ_OPTION = 10
+CQ_OPTION = 2
 PQ_OPTION = 1
 
 # ------------------------------, ----------------------------------------------------------------------------------------

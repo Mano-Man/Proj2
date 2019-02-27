@@ -27,11 +27,20 @@ INNAS_COMP = False
 #
 # ----------------------------------------------------------------------------------------------------------------------
 class Optimizer:
-    def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc=None, test_size=cfg.TEST_SET_SIZE):
+    def __init__(self, patch_size, ones_range, gran_thresh, max_acc_loss, init_acc=None, test_size=cfg.TEST_SET_SIZE,
+                 patterns_idx=None):
         self.ps = patch_size
         self.max_acc_loss = max_acc_loss
         self.gran_thresh = gran_thresh
-        self.ones_range = ones_range
+        
+        if patterns_idx is None:
+            self.ones_range = ones_range
+            self.input_patterns = None
+        else:
+            patterns_rec = load_from_file(f'all_patterns_ps{self.ps}_cluster{patterns_idx}.pkl', path=cfg.RESULTS_DIR)
+            self.ones_range = (patterns_rec[1], patterns_rec[1]+1)
+            self.input_patterns = patterns_rec[2]
+        
         self.full_net_run_time = None
         self.total_ops = None
         
@@ -50,7 +59,7 @@ class Optimizer:
         
         
     def plot_ops_saved_accuracy_uniform_network(self):
-        layers_layout = self.nn.net.generate_spatial_sizes(cfg.DATA_SHAPE())
+        layers_layout = self.nn.net.generate_spatial_sizes(dat.shape())
         rcs = Record(layers_layout, self.gran_thresh, True, Mode.UNIFORM_LAYER, self.init_acc, self.ps, self.ones_range)
         no_of_patterns = rcs.all_patterns.shape[2]
         ops_saved_array = [None]*no_of_patterns
@@ -80,8 +89,15 @@ class Optimizer:
         plt.ylabel('accuracy [%]') 
         plt.title(f'accuracy for uniform network, patch_size:{self.ps}')
         
-        plt.savefig(f'{cfg.RESULTS_DIR}/baseline_all_patterns_{cfg.NET.__name__}_{cfg.DATA_NAME}'+
+        data = [rcs.all_patterns, ops_saved_array, acc_array]
+        save_to_file(data, False, cfg.RESULTS_DIR, 'baseline_all_patterns_{cfg.NET.__name__}_{dat.name()}'+
+                    f'acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_mg{self.gran_thresh}.pkl')
+        
+        
+        plt.savefig(f'{cfg.RESULTS_DIR}/baseline_all_patterns_{cfg.NET.__name__}_{dat.name()}'+
                     f'acc{self.init_acc}_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_mg{self.gran_thresh}.pdf')
+        
+        return data
         
 
     def base_line_result(self):
@@ -200,7 +216,10 @@ class Optimizer:
 
     def eval_run_time(self, mode, no_of_tries=5):
         layers_layout = self.nn.net.generate_spatial_sizes(dat.shape())
-        recs_first_lvl = Record(layers_layout, self.gran_thresh, True, mode, self.init_acc, self.ps, self.ones_range)
+        if self.input_patterns is None:
+            recs_first_lvl = Record(layers_layout, self.gran_thresh, True, mode, self.init_acc, self.ps, self.ones_range)
+        else:
+            recs_first_lvl = Record(layers_layout, self.gran_thresh, False, mode, self.init_acc, self.input_patterns, self.ones_range)
         first_lvl_runs = recs_first_lvl.size
 
         self.nn.net.reset_spatial()
@@ -274,7 +293,7 @@ class Optimizer:
                     _, self.total_ops = self.nn.net.num_ops()
                 end_time = time.time()
                 self.nn.net.reset_ops()
-                assert test_acc == self.init_acc, f'starting accuracy does not match! curr_acc:{test_acc}, prev_acc{self.init_acc}'
+                assert test_acc == self.init_acc, f'starting accuracy does not match! curr_acc:{test_acc}, prev_acc:{self.init_acc}'
                 self.full_net_run_time += (end_time - st_time)
             self.full_net_run_time = round(self.full_net_run_time / no_of_tries, 3)
         return self.full_net_run_time
@@ -291,7 +310,10 @@ class Optimizer:
         self._init_nn()
 
         if rec_filename is None:
-            rcs = Record(layers_layout, self.gran_thresh, True, mode, self.init_acc, self.ps, self.ones_range)
+            if self.input_patterns is None:
+                rcs = Record(layers_layout, self.gran_thresh, True, mode, self.init_acc, self.ps, self.ones_range)
+            else:
+                rcs = Record(layers_layout, self.gran_thresh, False, mode, self.init_acc, self.input_patterns, self.ones_range)
             st_point = [0] * 4
 
         print('==> Result will be saved to ' + os.path.join(cfg.RESULTS_DIR, rcs.filename))

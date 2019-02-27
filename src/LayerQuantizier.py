@@ -19,7 +19,8 @@ import os
 LQ_DEBUG = False
 LQ_DEBUG_ALGO = 1
 LQ_PRODUCT = 1
-OPTS_PER_LAYER = 3
+LQ_PRODUCT_ALL = 2
+OPTS_PER_LAYER = 5
 
 class LayerQuantResumeRec():
     def __init__(self,no_of_layers, input_length, max_acc_loss, inp):
@@ -55,7 +56,7 @@ class LayerQuantResumeRec():
             self.is_final[layer] = True
 
     def is_finised(self):
-        return self.is_final==[True]*len(self.is_final)
+        return (self.is_final==[True]*len(self.is_final) or (self.resume_index is None))
         
     def add_rec(self, acc, ops_saved):
         self.test_acc_array.append(acc)
@@ -159,7 +160,7 @@ class LayerQuantizier():
         save_counter = 0 
         l_to_inc = self._get_next_opt()
         while (l_to_inc is not None):
-            if cfg.LQ_OPTION >= 10 and LQ_PRODUCT == cfg.LQ_OPTION%10:
+            if cfg.LQ_OPTION >= 10 and (LQ_PRODUCT == cfg.LQ_OPTION%10 or LQ_PRODUCT_ALL == cfg.LQ_OPTION%10):
                 for l_idx, p_idx in enumerate(self.resume_rec.resume_index):
                     self._update_layer( l_idx, p_idx)
                 nn.net.strict_mask_update(update_ids=list(range(len(self.layers_layout))), masks=self.sp_list)
@@ -239,14 +240,23 @@ class LayerQuantizier():
         return f_rec
 
     def _get_next_opt(self, nn=None, test_gen=None, curr_acc=None):
-        if cfg.LQ_OPTION >= 10 and LQ_PRODUCT == cfg.LQ_OPTION%10:
+        if cfg.LQ_OPTION >= 10 and (LQ_PRODUCT == cfg.LQ_OPTION%10 or LQ_PRODUCT_ALL == cfg.LQ_OPTION%10):
             if self.product_iter is None:
-                self.product_iter = product(range(OPTS_PER_LAYER),repeat = len(self.input))
+                if LQ_PRODUCT == cfg.LQ_OPTION%10:
+                    self.product_iter = product(range(OPTS_PER_LAYER),repeat = len(self.input))
+                elif LQ_PRODUCT_ALL == cfg.LQ_OPTION%10:
+                    lengths = [range(len(l)) for l in self.input]
+                    self.product_iter = product(*lengths)
                 p = list(next(self.product_iter, None))
                 while p != self.resume_rec.resume_index:
                     p = list(next(self.product_iter, None))
-            self.resume_rec.resume_index = list(next(self.product_iter, None))
-            return self.resume_rec.resume_index
+            p = next(self.product_iter, None)
+            if p is not None:
+                self.resume_rec.resume_index = list(p)
+                return self.resume_rec.resume_index
+            else:
+                self.resume_rec.resume_index = None
+                return None
             
         else:
             possible_layers = []
