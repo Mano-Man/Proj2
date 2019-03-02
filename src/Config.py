@@ -46,7 +46,7 @@ PQ_OPTION = 1
 #                                                Train Specific Functionality
 # ----------------------------------------------------------------------------------------------------------------------
 N_EPOCHS_TO_WAIT_BEFORE_LR_DECAY = 3
-SGD_METHOD = 'Adam' # Can also use: 'Adam' 'Nesterov'
+SGD_METHOD = 'Nesterov' # Can also use: 'Adam' 'Nesterov'
 VERBOSITY = 1  # 0 for per epoch output, 1 for per-batch output
 RESUME_METHOD = 'ValAcc'  # 'ValAcc' 'Time'
 DONT_SAVE_REDUNDANT = True  # Don't checkpoint if val_acc achieved is lower than what is in the cp directory
