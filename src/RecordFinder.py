@@ -75,7 +75,7 @@ class RecordFinder():
         return filename
 
     def _cQ_regex(self, mode):
-        regex = f'ChannelQ{self.cQ_option}r{self.cQ_ratio}_ma{self.max_acc_loss}_'
+        regex = f'ChannelQ{self.cQ_option.value}r{self.cQ_ratio}_ma{self.max_acc_loss}_'
         if mode == Mode.UNIFORM_PATCH:
             regex += self._first_lvl_regex(mode)
         else:  # mode == rc.max_granularity
@@ -83,7 +83,7 @@ class RecordFinder():
         return regex
 
     def _lQ_resume_regex(self, mode):
-        regex = f'LayerQ{self.lQ_option}_ma{self.max_acc_loss}_'
+        regex = f'LayerQ{self.lQ_option.value}_ma{self.max_acc_loss}_'
         if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
             regex += self._cQ_regex(mode)
         elif mode == Mode.UNIFORM_FILTERS:
@@ -93,15 +93,15 @@ class RecordFinder():
         return regex
 
     def _pQ_regex(self, mode):
-        regex = f'PatchQ{self.pQ_option}r{self.pQ_ratio}_ma{self.max_acc_loss}_'
+        regex = f'PatchQ{self.pQ_option.value}r{self.pQ_ratio}_ma{self.max_acc_loss}_'
         return (regex + self._first_lvl_regex(mode))
 
     def _final_rec_regex(self, mode):
-        quant_name = f'LQ{self.lQ_option}'
+        quant_name = f'LQ{self.lQ_option.value}'
         if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
-            quant_name += f'_CQ{self.cQ_option}r{cfg.CHANNELQ_UPDATE_RATIO}'
+            quant_name += f'_CQ{self.cQ_option.value}r{cfg.CHANNELQ_UPDATE_RATIO}'
         if mode == Mode.UNIFORM_FILTERS or mode == Mode.MAX_GRANULARITY:
-            quant_name += f'_PQ{self.pQ_option}r{cfg.PATCHQ_UPDATE_RATIO}'
+            quant_name += f'_PQ{self.pQ_option.value}r{cfg.PATCHQ_UPDATE_RATIO}'
             
         reg = f'FR_{self.net_name}_{self.dataset_name}_acc{self.init_acc}_{quant_name}'
         reg+= f'_ps{self.ps}_ones{self.ones_range[0]}x{self.ones_range[1]}_'

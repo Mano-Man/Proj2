@@ -10,7 +10,6 @@ import random
 from tqdm import tqdm
 import time
 
-# from util.data_import import CIFAR10_Test, CIFAR10_shape
 from RecordFinder import RecordFinder
 from NeuralNet import NeuralNet
 from Record import Mode, Modes, Record, RecordType, BaselineResultRc, load_from_file, save_to_file
@@ -23,6 +22,7 @@ from Config import DATA as dat
 
 #for debugging
 INNAS_COMP = False
+DEBUG_INIT_ACC = 98.7
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -48,6 +48,8 @@ class Optimizer:
         self.nn.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, self.ps)
         self.test_gen, _ = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
         self.test_set_size = cfg.TEST_SET_SIZE
+        if INNAS_COMP:
+            init_acc = DEBUG_INIT_ACC
         if init_acc is None:
             _, test_acc, correct = self.nn.test(self.test_gen)
             print(f'==> Asserted test-acc of: {test_acc} [{correct}]\n ')
@@ -315,6 +317,9 @@ class Optimizer:
             else:
                 rcs = Record(layers_layout, self.gran_thresh, False, mode, self.init_acc, self.input_patterns, self.ones_range)
             st_point = [0] * 4
+            
+            if INNAS_COMP:
+                rcs.filename = 'DEBUG_' + rcs.filename
 
         print('==> Result will be saved to ' + os.path.join(cfg.RESULTS_DIR, rcs.filename))
         save_counter = 0
@@ -323,9 +328,14 @@ class Optimizer:
                                          resume_params=st_point)):
             self.nn.net.strict_mask_update(update_ids=[layer], masks=[torch.from_numpy(mask)])
 
-            _, test_acc, _ = self.nn.test(self.test_gen)
-            ops_saved, ops_total = self.nn.net.num_ops()
-            self.nn.net.reset_spatial()
+            if INNAS_COMP:
+                test_acc =100
+                ops_saved = 100
+                ops_total = 100
+            else:
+                _, test_acc, _ = self.nn.test(self.test_gen)
+                ops_saved, ops_total = self.nn.net.num_ops()
+                self.nn.net.reset_spatial()
             rcs.addRecord(ops_saved, ops_total, test_acc, layer, channel, patch, pattern_idx)
 
             save_counter += 1

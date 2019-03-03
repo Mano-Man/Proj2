@@ -364,38 +364,13 @@ class Record():
                     for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),
                                                    key=lambda x: (x[1][0], x[1][2]), reverse=True):
                         if res_tuple[2] >= min_acc:
-                            #patch.append((p_idx,res_tuple[0],res_tuple[2]))
                             patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
-                            #patch.append((p_idx,100*(res_tuple[0]/(res_tuple[1]+1)),res_tuple[2]))
                     patch.append((-1, 0, self.init_acc,100))
                     channel.append(patch)
                 layer.append(channel)
             slresults.append(layer)
         return slresults
     
-    def gen_results_sort_by_acc(self, min_acc):
-        '''
-        
-        '''
-        assert self.is_full(), "Error! Not all results recorded!"
-        slresults = []
-        for l in range(self.no_of_layers):
-            layer = []
-            for k in range(self.no_of_channels[l]):
-                channel = []
-                for j in range(self.no_of_patches[l]):
-                    patch = []
-                    for p_idx, res_tuple in sorted(enumerate(self.results[l][k][j][:]),
-                                                   key=lambda x: (x[1][2], x[1][0]), reverse=True):
-                        if res_tuple[2] >= min_acc:
-                            #patch.append((p_idx,res_tuple[0],res_tuple[2]))
-                            patch.append((p_idx,res_tuple[0],res_tuple[2],res_tuple[1]))
-                            #patch.append((p_idx,100*(res_tuple[0]/(res_tuple[1]+1)),res_tuple[2]))
-                    patch.append((-1, 0, self.init_acc,100))
-                    channel.append(patch)
-                layer.append(channel)
-            slresults.append(layer)
-        return slresults
 
 # ----------------------------------------------------------------------------------------------------------------------
 #                                               Final Result Record Class
@@ -403,11 +378,11 @@ class Record():
 class FinalResultRc():
     def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern, ps, max_acc_loss,
                  ones_range, net_name, dataset_name, layers_layout):
-        quant_name = f'LQ{cfg.LQ_OPTION}'
+        quant_name = f'LQ{cfg.LQ_OPTION.value}'
         if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
-            quant_name += f'_CQ{cfg.CQ_OPTION}r{cfg.CHANNELQ_UPDATE_RATIO}'
+            quant_name += f'_CQ{cfg.CQ_OPTION.value}r{cfg.CHANNELQ_UPDATE_RATIO}'
         if mode == Mode.UNIFORM_FILTERS or mode == Mode.MAX_GRANULARITY:
-            quant_name += f'_PQ{cfg.PQ_OPTION}r{cfg.PATCHQ_UPDATE_RATIO}'
+            quant_name += f'_PQ{cfg.PQ_OPTION.value}r{cfg.PATCHQ_UPDATE_RATIO}'
         self.filename = f'FR_{net_name}_{dataset_name}_acc{init_acc}_{quant_name}'
         self.filename+= f'_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_'
         self.filename+= f'{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'

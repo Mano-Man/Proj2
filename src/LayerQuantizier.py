@@ -6,7 +6,6 @@ Created on Mon Nov 26 19:51:55 2018
 """
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
 from Record import Mode, FinalResultRc, load_from_file, save_to_file
 import Config as cfg
@@ -17,10 +16,6 @@ import csv
 import os
 
 LQ_DEBUG = False
-LQ_DEBUG_ALGO = 1
-LQ_PRODUCT = 1
-LQ_PRODUCT_ALL = 2
-OPTS_PER_LAYER = 5
 
 class LayerQuantResumeRec():
     def __init__(self,no_of_layers, input_length, max_acc_loss, inp):
@@ -35,10 +30,6 @@ class LayerQuantResumeRec():
         self.curr_resume_index = self.resume_index.copy()
         self.curr_best_mask = None
         self.input = inp
-        self.test_acc_array = []
-        self.ops_saved_array = []
-        self.acc_diff_arr = []
-        self.ops_diff_arr = []
         self.algo_debug = []
         
     def find_first_unfinished_layer(self, should_mark=False):
@@ -58,18 +49,10 @@ class LayerQuantResumeRec():
     def is_finised(self):
         return (self.is_final==[True]*len(self.is_final) or (self.resume_index is None))
         
-    def add_rec(self, acc, ops_saved):
-        self.test_acc_array.append(acc)
-        self.ops_saved_array.append(ops_saved)
-        
-    def add_next_idx(self, acc_diff, ops_diff):
-        self.acc_diff_arr.append(acc_diff)
-        self.ops_diff_arr.append(ops_diff)
-        
     def add_algo_debug_rec(self, acc, ops_saved, tot_ops):
         self.algo_debug.append([self.resume_index.copy(), acc, ops_saved, tot_ops, ops_saved/tot_ops])
         
-    def debug_algo_csv(self, fn):
+    def save_csv(self, fn):
         out_path = os.path.join(cfg.RESULTS_DIR, fn + ".csv")
         with open(out_path, 'w', newline='') as f:
             csv.writer(f).writerow([len(l)-1 for l in self.input])
@@ -78,22 +61,6 @@ class LayerQuantResumeRec():
                 ['option', 'accuracy', 'operations saved', 'total operations', '% saved'])
             for r in self.algo_debug:
                 csv.writer(f).writerow(r)
-        
-    def debug(self, fn):
-        plt.figure()
-        plt.subplot(221)
-        plt.plot(list(range(len(self.test_acc_array))), self.test_acc_array,'o--') 
-        plt.ylabel('acc [%]') 
-        plt.subplot(222)
-        plt.plot(list(range(len(self.ops_saved_array))), self.ops_saved_array,'o--') 
-        plt.ylabel('ops saved') 
-        plt.subplot(223)
-        plt.plot(list(range(len(self.acc_diff_arr))), self.acc_diff_arr,'o--') 
-        plt.ylabel('acc diff')
-        plt.subplot(224)
-        plt.plot(list(range(len(self.ops_diff_arr))), self.ops_diff_arr,'o--') 
-        plt.ylabel('ops diff')
-        plt.savefig(f'{cfg.RESULTS_DIR}/debug_{fn}.pdf')
         
 
 
@@ -112,8 +79,7 @@ class LayerQuantizier():
         self.input = [self.input[l][0][0] for l in range(len(self.input))]
         self.no_of_patterns = sum([len(self.input[l_idx]) for l_idx in range(len(self.input))])
         self._clean_input()
-        if LQ_DEBUG_ALGO == int(cfg.LQ_OPTION/10):
-            self.product_iter = None
+        self.product_iter = None
         
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
@@ -121,11 +87,11 @@ class LayerQuantizier():
             self.default_in_pattern = np.ones((self.input_patterns.shape[0], self.input_patterns.shape[0]),
                                               dtype=self.input_patterns.dtype)
         elif rec.mode == Mode.UNIFORM_FILTERS:
-            self.default_in_pattern = np.ones((1, 1), dtype=self.input_patterns[0][0][0].dtype)
+            self.default_in_pattern = np.ones((self.patch_size, self.patch_size), dtype=self.input_patterns[0][0][0].dtype)
         else:
-            self.default_in_pattern = np.ones((1, 1), dtype=self.input_patterns[0][0].dtype)
+            self.default_in_pattern = np.ones((self.patch_size, self.patch_size), dtype=self.input_patterns[0][0].dtype)
 
-        self.resume_param_filename = f'LayerQ{cfg.LQ_OPTION}_ma' + str(max_acc_loss) + '_' + rec.filename
+        self.resume_param_filename = f'LayerQ{cfg.LQ_OPTION.value}_ma' + str(max_acc_loss) + '_' + rec.filename
         if LQ_DEBUG:
             self.resume_param_filename = 'DEBUG_' + self.resume_param_filename
 
@@ -160,7 +126,7 @@ class LayerQuantizier():
         save_counter = 0 
         l_to_inc = self._get_next_opt()
         while (l_to_inc is not None):
-            if cfg.LQ_OPTION >= 10 and (LQ_PRODUCT == cfg.LQ_OPTION%10 or LQ_PRODUCT_ALL == cfg.LQ_OPTION%10):
+            if cfg.LQ_OPTION == cfg.LQ_modes.PRODUCT:
                 for l_idx, p_idx in enumerate(self.resume_rec.resume_index):
                     self._update_layer( l_idx, p_idx)
                 nn.net.strict_mask_update(update_ids=list(range(len(self.layers_layout))), masks=self.sp_list)
@@ -192,9 +158,7 @@ class LayerQuantizier():
         return self.resume_rec.is_finised()
 
     def save_state(self, test_acc, ops_saved, ops_total, to_file=False):
-        self.resume_rec.add_rec(test_acc, ops_saved)
-        if LQ_DEBUG_ALGO == int(cfg.LQ_OPTION/10):
-            self.resume_rec.add_algo_debug_rec(test_acc, ops_saved, ops_total)
+        self.resume_rec.add_algo_debug_rec(test_acc, ops_saved, ops_total)
         if test_acc >=  self.min_acc and ops_saved > self.resume_rec.curr_saved_ops:
             self.resume_rec.curr_best_acc = test_acc
             self.resume_rec.curr_saved_ops = ops_saved
@@ -222,9 +186,9 @@ class LayerQuantizier():
         else:
             self.sp_list[l_idx] = torch.from_numpy(self.input_patterns[l_idx][opt[0]])
 
+
     def _save_final_rec(self):
-        if LQ_DEBUG_ALGO == int(cfg.LQ_OPTION/10):
-            self.resume_rec.debug_algo_csv(self.resume_param_filename)
+        self.resume_rec.save_csv(self.resume_param_filename)
         save_to_file(self.resume_rec, False, cfg.RESULTS_DIR, self.resume_param_filename)
         if self.resume_rec.curr_tot_ops == 0:
             print(f'==> No suitable Option was found for min accuracy of {self.min_acc}')
@@ -240,13 +204,10 @@ class LayerQuantizier():
         return f_rec
 
     def _get_next_opt(self, nn=None, test_gen=None, curr_acc=None):
-        if cfg.LQ_OPTION >= 10 and (LQ_PRODUCT == cfg.LQ_OPTION%10 or LQ_PRODUCT_ALL == cfg.LQ_OPTION%10):
+        if cfg.LQ_OPTION == cfg.LQ_modes.PRODUCT:
             if self.product_iter is None:
-                if LQ_PRODUCT == cfg.LQ_OPTION%10:
-                    self.product_iter = product(range(OPTS_PER_LAYER),repeat = len(self.input))
-                elif LQ_PRODUCT_ALL == cfg.LQ_OPTION%10:
-                    lengths = [range(len(l)) for l in self.input]
-                    self.product_iter = product(*lengths)
+                lengths = [range(len(l)) for l in self.input]
+                self.product_iter = product(*lengths)
                 p = list(next(self.product_iter, None))
                 while p != self.resume_rec.resume_index:
                     p = list(next(self.product_iter, None))
@@ -271,27 +232,9 @@ class LayerQuantizier():
                 for idx, layer in enumerate(possible_layers):
                     i = self.resume_rec.resume_index[layer]
                     acc_diff = self.input[layer][i+1][2]-self.input[layer][i][2]
-                    if cfg.LQ_OPTION==3:
+                    if cfg.LQ_OPTION == cfg.LQ_modes.DEFAULT:
                         ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
-                        if acc_diff == 0:
-                            acc_diff = 1
-                    if cfg.LQ_OPTION==6:
-                        ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
-                        if acc_diff <= 0:
-                            acc_diff = 1
-                    elif cfg.LQ_OPTION==4:
-                        ops_diff = 100*((self.input[layer][i][1]-self.input[layer][i+1][1]+1)/self.total_ops) 
-                    elif cfg.LQ_OPTION==5 or cfg.LQ_OPTION >= 10:
-                        ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
-                    elif cfg.LQ_OPTION==2:
-                        ops_diff = (current_sum_ops_saved - self._next_sum_ops_saved(layer,current_sum_ops_saved) + 1)/(current_sum_ops_saved + 1)
-                        acc_diff = 1
-                    elif cfg.LQ_OPTION==1:
-                        ops_diff = 100*(self.input[layer][i][1]/self.input[layer][i][3]-self.input[layer][i+1][1]/self.input[layer][i+1][3])+0.0001
-                        
-                    self.resume_rec.add_next_idx(acc_diff,ops_diff)
-    
-                    test_arr[idx] = (1/(ops_diff))*acc_diff
+                    test_arr[idx] = acc_diff/ops_diff
     
                 idx_to_inc = max(reversed(range(len(test_arr))), key=test_arr.__getitem__)
                 l_to_inc = possible_layers[idx_to_inc]
@@ -329,7 +272,7 @@ class LayerQuantizier():
         p_idx, ops_saved, acc, tot_ops = tup
         if ops_saved == 0 and p_idx != -1:
             return False
-        if cfg.LQ_OPTION == 17:
+        if cfg.LQ_OPTION == cfg.LQ_modes.CLEAN_DECREASING_ACC:
             if self.curr_acc_th >= acc and acc > 0:
                 return False
             else:

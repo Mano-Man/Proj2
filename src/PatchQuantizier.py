@@ -98,7 +98,7 @@ class PatchQuantizier():
         self.output_rec.set_results_dimensions(no_of_patterns=no_of_patterns_gen,
                                                no_of_channels=[len(c) for c in all_patterns])
         
-        fn = f'PatchQ{cfg.PQ_OPTION}r{cfg.PATCHQ_UPDATE_RATIO}_ma{max_acc_loss}_' + rec_in_filename
+        fn = f'PatchQ{cfg.PQ_OPTION.value}r{cfg.PATCHQ_UPDATE_RATIO}_ma{max_acc_loss}_' + rec_in_filename
         if PQ_DEBUG:
             fn = 'DEBUG_' + fn
         self.output_rec.set_filename(fn)
@@ -117,10 +117,7 @@ class PatchQuantizier():
             if (self.actual_patch_sizes[l] != self.patch_size):
                 p = mf.tile_opt((self.actual_patch_sizes[l], self.actual_patch_sizes[l]), p, False)
             channel = mf.change_one_patch2d(channel, ii, jj, self.actual_patch_sizes[l], p)
-        if (self.actual_patch_sizes[l] != self.patch_size):
-            new_patch_n = math.ceil(layer_dims[1] / self.patch_size)
-            new_patch_m = math.ceil(layer_dims[2] / self.patch_size)
-        return channel[0:(new_patch_n * self.patch_size), 0:(new_patch_m * self.patch_size)]
+        return mf.crop(layer_dims, channel, self.patch_size)
     
     def _zip_ratio(self, curr_channel_opt, patches_to_update, channel_input):
         possible_patches = []
@@ -134,7 +131,7 @@ class PatchQuantizier():
                 possible_patches.append(patch)
         
         if patches_to_update < len(possible_patches):
-            if cfg.PQ_OPTION == 1:
+            if cfg.PQ_OPTION == cfg.PQ_modes.DEFAULT:
                 sorted_patches = [x for x,_ in sorted(zip(possible_patches, itemgetter(*possible_patches)(curr_channel_opt)), key=lambda pair: pair[1])]
                 if patches_to_update == 1:
                     patches_to_inc = [sorted_patches[0]]
@@ -148,7 +145,7 @@ class PatchQuantizier():
         additional_patches = patches_to_update - len(patches_to_inc)
         if additional_patches > 0:
             if additional_patches < len(last_stage_patches):
-                if cfg.CQ_OPTION == 1:
+                if cfg.PQ_OPTION == cfg.PQ_modes.DEFAULT:
                     if additional_patches == 1:
                         patches_to_inc.append(last_stage_patches[0])
                     else:

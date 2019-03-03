@@ -9,6 +9,18 @@ from Record import Mode, actual_patch_size
 #                                          Util Functions for Generating Masks
 # ----------------------------------------------------------------------------------------------------------------------
 
+def expend_dims(dims, ps):
+    patch_n = math.ceil(dims[1] / ps)
+    patch_m = math.ceil(dims[2] / ps)
+    return (dims[0], patch_n*ps, patch_m*ps)
+
+def crop(dims, mask, ps, is3D = False):
+    e_dims = expend_dims(dims, ps)
+    if is3D:
+        return mask[:, 0:e_dims[1],0:e_dims[2]]
+    else:
+        return mask[0:e_dims[1],0:e_dims[2]]
+
 def tile_opt(dims, pattern, is3D=True):
     if is3D and len(pattern.shape) == 2:
         pattern = pattern[np.newaxis, :, :]

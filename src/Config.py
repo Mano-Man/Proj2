@@ -1,4 +1,5 @@
 # Models: (There are many more)
+from enum import Enum
 from models.resnet import ResNet18, ResNet18Spatial,ResNet18SpatialUniBlock,ResNet18SpatialUniCluster, ResNet34Spatial
 from models.alexnet import AlexNetS
 from util.datasets import Datasets
@@ -23,7 +24,7 @@ DATASET_DIR = os.path.join(basedir, 'datasets')
 # ----------------------------------------------------------------------------------------------------------------------
 # Global Adjustments:
 NETS = [ResNet18Spatial,ResNet18SpatialUniBlock,ResNet18SpatialUniCluster, ResNet34Spatial, AlexNetS]
-NET = NETS[0]  # The chosen network
+NET = NETS[4]  # The chosen network
 
 #print(Datasets.which()) #('MNIST', 'CIFAR10', 'ImageNet', 'TinyImageNet', 'STL10', 'FashionMNIST')
 DATA = Datasets.get('CIFAR10',DATASET_DIR)
@@ -38,9 +39,19 @@ PATCHQ_UPDATE_RATIO = 1
 
 # for future debuging...
 TWO_STAGE = True
-LQ_OPTION = 10
-CQ_OPTION = 2
-PQ_OPTION = 1
+
+class LQ_modes(Enum):
+    DEFAULT = 10
+    PRODUCT = 12
+    CLEAN_DECREASING_ACC = 17
+class CQ_modes(Enum):
+    DEFAULT = 1
+class PQ_modes(Enum):
+    DEFAULT = 1
+    
+LQ_OPTION = LQ_modes.DEFAULT
+CQ_OPTION = CQ_modes.DEFAULT
+PQ_OPTION = PQ_modes.DEFAULT
 
 # ------------------------------, ----------------------------------------------------------------------------------------
 #                                                Train Specific Functionality

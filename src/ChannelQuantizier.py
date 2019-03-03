@@ -10,7 +10,6 @@ import torch
 from tqdm import tqdm
 from itertools import zip_longest
 from operator import itemgetter
-import random
 import math
 
 from Record import Mode, RecordType, Record, save_to_file
@@ -26,16 +25,17 @@ class ChannelQuantizier():
         self.input = rec.gen_pattern_lists(init_acc - max_acc_loss)
         
         input_new = []
+        self.no_of_patterns = 0
         for l in range(len(self.input)):
             input_new.append([self.input[l][c][0] for c in range(rec.layers_layout[l][0])])
+            self.no_of_patterns += max([len(self.input[l][c][0]) for c in range(rec.layers_layout[l][0])])
         self.input = input_new
-        if cfg.CQ_OPTION == 2:
-            self._clean_input()
+        self._clean_input()
 
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
         elif rec.mode == Mode.MAX_GRANULARITY:
-            self.default_in_pattern = np.ones((1, 1), dtype=self.input_patterns[0][0][0].dtype)
+            self.default_in_pattern = np.ones((self.patch_size, self.patch_size), dtype=self.input_patterns[0][0][0].dtype)
         else:
             self.default_in_pattern = np.ones((self.input_patterns.shape[0], self.input_patterns.shape[0]),
                                               dtype=self.input_patterns.dtype)
@@ -46,7 +46,7 @@ class ChannelQuantizier():
             self.output_rec = out_rec
             
     def number_of_iters(self):
-        return sum(self.output_rec.no_of_patterns)
+        return self.no_of_patterns
 
     def simulate(self, nn, test_gen):
         st_point = self.output_rec.find_resume_point()
@@ -95,13 +95,13 @@ class ChannelQuantizier():
         self.output_rec.set_all_patterns(all_patterns, RecordType.cQ_REC)
         self.output_rec.set_results_dimensions(no_of_patterns=no_of_patterns_gen)
 
-        fn = f'ChannelQ{cfg.CQ_OPTION}r{cfg.CHANNELQ_UPDATE_RATIO}_ma{max_acc_loss}_' + rec_in_filename
+        fn = f'ChannelQ{cfg.CQ_OPTION.value}r{cfg.CHANNELQ_UPDATE_RATIO}_ma{max_acc_loss}_' + rec_in_filename
         if CQ_DEBUG:
             fn = 'DEBUG_' + fn
         self.output_rec.set_filename(fn)
         
     def _build_layer(self, layer_dims, layer_opt, l, mode):
-        layer = np.ones(layer_dims, dtype=self.default_in_pattern.dtype)
+        layer = np.ones(mf.expend_dims(layer_dims, self.patch_size), dtype=self.default_in_pattern.dtype)
         for idx, opt in enumerate(layer_opt):
             if type(opt) is int:
                 opt = self.input[l][idx][opt]
@@ -114,7 +114,7 @@ class ChannelQuantizier():
             else:
                 tmp = mf.tile_opt((layer_dims[1], layer_dims[2]),
                                                self.input_patterns[:, :, opt[0]], False)
-            layer[idx, :, :] = tmp[0:layer_dims[1], 0:layer_dims[2]]
+            layer[idx, :, :] = mf.crop(layer_dims,tmp, self.patch_size)
         return layer
     
     def _gen_patterns_zip_ratio(self, mode, layers_layout):
@@ -143,9 +143,7 @@ class ChannelQuantizier():
                 possible_channels.append(channel)
         
         if channels_to_update < len(possible_channels):
-            if cfg.CQ_OPTION == 2:
-                channels_to_inc = random.sample(possible_channels, channels_to_update)
-            elif cfg.CQ_OPTION == 1:
+            if cfg.CQ_OPTION == cfg.CQ_modes.DEFAULT:
                 sorted_channels = [x for x,_ in sorted(zip(possible_channels, itemgetter(*possible_channels)(curr_layer_opt)), key=lambda pair: pair[1])]
                 if channels_to_update == 1:
                     channels_to_inc = [sorted_channels[0]]
@@ -159,9 +157,7 @@ class ChannelQuantizier():
         additional_channels = channels_to_update - len(channels_to_inc)
         if additional_channels > 0:
             if additional_channels < len(last_stage_channels):
-                if cfg.CQ_OPTION == 2:
-                    channels_to_inc += random.sample(last_stage_channels, additional_channels)
-                elif cfg.CQ_OPTION == 1:
+                if cfg.CQ_OPTION == cfg.CQ_modes.DEFAULT:
                     if additional_channels == 1:
                         channels_to_inc.append(last_stage_channels[0])
                     else:
