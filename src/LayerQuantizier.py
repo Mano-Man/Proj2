@@ -77,7 +77,12 @@ class LayerQuantizier():
         
         self.input = rec.gen_pattern_lists(self.min_acc)
         self.input = [self.input[l][0][0] for l in range(len(self.input))]
-        self.no_of_patterns = sum([len(self.input[l_idx]) for l_idx in range(len(self.input))])
+        self.no_of_patterns = 1
+        for l_idx in range(len(self.input)):
+            if cfg.LQ_OPTION == cfg.LQ_modes.DEFAULT:
+                self.no_of_patterns += len(self.input[l_idx])
+            elif cfg.LQ_OPTION == cfg.LQ_modes.PRODUCT:
+                self.no_of_patterns *= len(self.input[l_idx])
         self._clean_input()
         self.product_iter = None
         

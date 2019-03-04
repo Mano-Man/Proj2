@@ -30,7 +30,6 @@ class ChannelQuantizier():
             input_new.append([self.input[l][c][0] for c in range(rec.layers_layout[l][0])])
             self.no_of_patterns += max([len(self.input[l][c][0]) for c in range(rec.layers_layout[l][0])])
         self.input = input_new
-        self._clean_input()
 
         if default_in_pattern is not None:
             self.default_in_pattern = default_in_pattern
