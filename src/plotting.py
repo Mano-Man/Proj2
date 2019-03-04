@@ -15,6 +15,7 @@ def show_final_mask(show_all_layers=False, layers_to_show=None, show_all_channel
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
     final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
     if final_rec_fn is None:
+        print('No Record found')
         return
     rec = load_from_file(final_rec_fn, '')
     print(rec)
@@ -181,3 +182,30 @@ def get_baseline_rec(net_name, dataset_name, ps, init_acc):
         print(f' !!! Adjust TEST_SET_SIZE in Config.py !!!')
         return bs_line_fn
     return load_from_file(bs_line_fn, '')
+
+if __name__ == '__main__':
+#    show_final_mask(show_all_layers=True, layers_to_show=None, show_all_channels=False,
+#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5)
+#    
+#    show_final_mask(show_all_layers=True, layers_to_show=None, show_all_channels=False,
+#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.UNIFORM_FILTERS, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5)
+    
+    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
+                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                    gran_thresh=10, init_acc=93.5)
+    uniform_patch_mask = [None]*len(rec.mask)
+    for idx, l_mask in enumerate(rec.mask):
+        uniform_patch_mask[idx] = l_mask.numpy()
+        
+    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
+                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                    gran_thresh=10, init_acc=93.5)
+    max_garn_mask = [None]*len(rec.mask)
+    for idx, l_mask in enumerate(rec.mask):
+        max_garn_mask[idx] = l_mask.numpy()
