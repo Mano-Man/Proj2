@@ -1,10 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import math
+import os
+import csv
 
 from RecordFinder import RecordFinder
 from Optimizer import Optimizer
-from Record import RecordType, Mode, gran_dict, load_from_file
+from NeuralNet import NeuralNet
+from util.datasets import Datasets
+from Record import RecordType, Mode, gran_dict, load_from_file, save_to_file
 import Config as cfg
 
 
@@ -51,9 +56,186 @@ def show_final_mask(show_all_layers=False, layers_to_show=None, show_all_channel
                 channels = channels_to_show[idx]
             elif type(channels_to_show) is not list:
                 channels = [channels_to_show]
+            else:
+                channels = channels_to_show
             for channel in channels:
                 show_channel(l_to_plot_idx, channel, rec.layers_layout[l_to_plot_idx], l_to_plot[channel],
                              rec.patch_size)
+
+    return rec
+
+def ops_saved_summery(net_name=cfg.NET.__name__, dataset_name=cfg.DATA.name(),
+                 mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
+                 gran_thresh='*', init_acc='*', batch_size=cfg.BATCH_SIZE, 
+                 max_samples=cfg.TEST_SET_SIZE):
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
+    final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
+    if final_rec_fn is None:
+        print('No Record found')
+        return
+    rec = load_from_file(final_rec_fn, '')
+    print(rec)
+    
+    base_fn = 'ops_summery_'+rec.filename
+    summery_fn_pkl = os.path.join(cfg.RESULTS_DIR,base_fn +'.pkl')
+    if os.path.exists(summery_fn_pkl):
+        arr = load_from_file(summery_fn_pkl, path='')
+    else:
+        nn = NeuralNet()
+        data = Datasets.get(dataset_name,cfg.DATASET_DIR)
+        nn.net.initialize_spatial_layers(data.shape(), cfg.BATCH_SIZE, rec.patch_size)
+        test_gen, _ = data.testset(batch_size=batch_size, max_samples=max_samples)
+        
+        arr = [None]*len(rec.mask)
+        for idx, layer in enumerate(rec.mask):
+            nn.net.reset_spatial()
+            print(f"----------------------------------------------------------------")
+            
+            nn.net.strict_mask_update(update_ids=[idx], masks=[layer])
+            _, test_acc, _ = nn.test(test_gen)
+            ops_saved, ops_total = nn.net.num_ops()
+            
+            arr[idx] = (ops_saved, ops_total, test_acc)
+            nn.net.print_ops_summary()
+            
+        print(f"----------------------------------------------------------------")
+        nn.net.reset_spatial()
+        save_to_file(arr, use_default=False, path='', filename=summery_fn_pkl)
+    
+    out_path = os.path.join(cfg.RESULTS_DIR, base_fn + ".csv")
+    with open(out_path, 'w', newline='') as f:
+        csv.writer(f).writerow(
+            ['layer','ops_saved', 'ops_total'])
+        for idx, r in enumerate(arr):
+            csv.writer(f).writerow([idx, r[0], r[1]])
+    
+    return arr
+    
+
+def show_channel_grid(layer=0, net_name='*', dataset_name='*',
+                 mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
+                 gran_thresh='*', init_acc='*', filename=None):
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
+    final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
+    if final_rec_fn is None:
+        print('No Record found')
+        return
+    rec = load_from_file(final_rec_fn, '')
+    
+    layer_mask = rec.mask[layer].numpy()
+    
+    no_of_channels = layer_mask.shape[0]
+    rows = math.ceil(math.sqrt(no_of_channels))
+    fig, axs = plt.subplots(nrows=rows, ncols=rows)
+    fig.set_figheight(30) 
+    fig.set_figwidth(30)
+    
+    for c in range(layer_mask.shape[0]):
+        row_idx = math.floor(c/rows)
+        col_idx = c - row_idx*rows
+        axs[row_idx][col_idx].imshow(layer_mask[c], cmap=plt.cm.gray) #(0:black, 1:white)
+        axs[row_idx][col_idx].set_title(f'Channel:{c}')
+        # Minor ticks
+        axs[row_idx][col_idx].set_xticks(np.arange(-.5, layer_mask[c].shape[0] - 1, rec.patch_size), minor=True);
+        axs[row_idx][col_idx].set_yticks(np.arange(-.5, layer_mask[c].shape[1] - 1, rec.patch_size), minor=True);
+        # Gridlines based on minor ticks
+        #axs[row_idx][col_idx].grid(which='minor', color='r', linestyle='-', linewidth=2)
+        axs[row_idx][col_idx].tick_params(axis='both', which='major', bottom=False, top=False,
+                        left=False, right=False, labelbottom=False, labelleft=False)
+        #axs[row_idx][col_idx].colorbar()
+    plt.tight_layout()    
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+
+    return rec
+    
+
+def show_final_mask_simplegrid_resnet18(
+                    channel=0, net_name='*', dataset_name='*',
+                    mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
+                    gran_thresh='*', init_acc='*', filename=None):
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
+    final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
+    if final_rec_fn is None:
+        print('No Record found')
+        return
+    rec = load_from_file(final_rec_fn, '')
+    
+    grid = (4,5)
+    st = ((0,0), (0,1), (0,2), (0,3), (0,4),
+          (1,0), (1,1), (1,2), (1,3),
+          (2,0), (2,1), (2,2), (2,3),
+          (3,0), (3,1), (3,2), (3,3))
+    
+    fig = plt.figure()
+    fig.set_figheight(10) 
+    fig.set_figwidth(14)
+    for l_to_plot_idx, l_to_plot in enumerate(rec.mask):
+        l_to_plot = l_to_plot.numpy()
+        
+        
+        plt.subplot2grid(grid, st[l_to_plot_idx])
+        plt.imshow(l_to_plot[channel], cmap=plt.cm.gray) #(0:black, 1:white)
+        plt.title(f'Layer:{l_to_plot_idx}')
+        ax = plt.gca()
+        # Minor ticks
+        ax.set_xticks(np.arange(-.5, l_to_plot[channel].shape[0] - 1, rec.patch_size), minor=True);
+        ax.set_yticks(np.arange(-.5, l_to_plot[channel].shape[1] - 1, rec.patch_size), minor=True);
+        # Gridlines based on minor ticks
+        #ax.grid(which='minor', color='r', linestyle='-', linewidth=2)
+        plt.tick_params(axis='both', which='major', bottom=False, top=False,
+                        left=False, right=False, labelbottom=False, labelleft=False)
+        #plt.colorbar()
+    plt.tight_layout()
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+    
+
+def show_final_mask_grid_resnet18(
+                    channel=0, net_name='*', dataset_name='*',
+                    mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
+                    gran_thresh='*', init_acc='*', filename=None):
+    rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
+    final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
+    if final_rec_fn is None:
+        print('No Record found')
+        return
+    rec = load_from_file(final_rec_fn, '')
+    
+    shift = 4
+    grid = (18,24)
+    st = ((0,0), (0,8), (0,16), (8,0), (8,8),
+          (8,16), (8,20), (12,16), (12,20),
+          (16,0+shift), (16,2+shift), (16,4+shift), (16,6+shift), (16,8+shift), (16,10+shift), (16,12+shift), (16, 14+shift))
+    span = (8,8,8,8,8,4,4,4,4,2,2,2,2,2,2,2,2)
+    
+    fig = plt.figure()
+    fig.set_figheight(10) 
+    fig.set_figwidth(15)
+    for l_to_plot_idx, l_to_plot in enumerate(rec.mask):
+        l_to_plot = l_to_plot.numpy()
+        
+        
+        plt.subplot2grid(grid, st[l_to_plot_idx], colspan=span[l_to_plot_idx], rowspan=span[l_to_plot_idx])
+        plt.imshow(l_to_plot[channel], cmap=plt.cm.gray) #(0:black, 1:white)
+        plt.title(f'Layer:{l_to_plot_idx}')
+        ax = plt.gca()
+        # Minor ticks
+        ax.set_xticks(np.arange(-.5, l_to_plot[channel].shape[0] - 1, rec.patch_size), minor=True);
+        ax.set_yticks(np.arange(-.5, l_to_plot[channel].shape[1] - 1, rec.patch_size), minor=True);
+        # Gridlines based on minor ticks
+        ax.grid(which='minor', color='r', linestyle='-', linewidth=2)
+        plt.tick_params(axis='both', which='major', bottom=False, top=False,
+                        left=False, right=False, labelbottom=False, labelleft=False)
+    plt.tight_layout()    
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
 
     return rec
 
@@ -183,29 +365,60 @@ def get_baseline_rec(net_name, dataset_name, ps, init_acc):
         return bs_line_fn
     return load_from_file(bs_line_fn, '')
 
+
 if __name__ == '__main__':
-#    show_final_mask(show_all_layers=True, layers_to_show=None, show_all_channels=False,
-#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
+    
+    arr_layer = ops_saved_summery(net_name=cfg.NETS[0].__name__, dataset_name='CIFAR10',
+                 mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                 gran_thresh=10, init_acc=93.5, batch_size=cfg.BATCH_SIZE, 
+                 max_samples=cfg.TEST_SET_SIZE)
+    
+    arr_patch = ops_saved_summery(net_name=cfg.NETS[0].__name__, dataset_name='CIFAR10',
+                 mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                 gran_thresh=10, init_acc=93.5, batch_size=cfg.BATCH_SIZE, 
+                 max_samples=cfg.TEST_SET_SIZE)
+    
+    arr_filters = ops_saved_summery(net_name=cfg.NETS[0].__name__, dataset_name='CIFAR10',
+                 mode=Mode.UNIFORM_FILTERS, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                 gran_thresh=10, init_acc=93.5, batch_size=cfg.BATCH_SIZE, 
+                 max_samples=cfg.TEST_SET_SIZE)
+    
+    arr_gran = ops_saved_summery(net_name=cfg.NETS[0].__name__, dataset_name='CIFAR10',
+                 mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                 gran_thresh=10, init_acc=93.5, batch_size=cfg.BATCH_SIZE, 
+                 max_samples=cfg.TEST_SET_SIZE)
+    
+#    show_final_mask_grid_resnet18(
+#                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
 #                    gran_thresh=10, init_acc=93.5)
+#    
+#    show_final_mask_simplegrid_resnet18(
+#                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5)
+    
+#    rec = show_channel_grid(layer=4, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                 mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                 gran_thresh=10, init_acc=93.5)
 #    
 #    show_final_mask(show_all_layers=True, layers_to_show=None, show_all_channels=False,
 #                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
 #                    mode=Mode.UNIFORM_FILTERS, ps=2, ones_range=(1, 3), acc_loss=3.5,
 #                    gran_thresh=10, init_acc=93.5)
     
-    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
-                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
-                    gran_thresh=10, init_acc=93.5)
-    uniform_patch_mask = [None]*len(rec.mask)
-    for idx, l_mask in enumerate(rec.mask):
-        uniform_patch_mask[idx] = l_mask.numpy()
-        
-    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
-                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
-                    gran_thresh=10, init_acc=93.5)
-    max_garn_mask = [None]*len(rec.mask)
-    for idx, l_mask in enumerate(rec.mask):
-        max_garn_mask[idx] = l_mask.numpy()
+#    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
+#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5)
+#    uniform_patch_mask = [None]*len(rec.mask)
+#    for idx, l_mask in enumerate(rec.mask):
+#        uniform_patch_mask[idx] = l_mask.numpy()
+#        
+#    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
+#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5)
+#    max_garn_mask = [None]*len(rec.mask)
+#    for idx, l_mask in enumerate(rec.mask):
+#        max_garn_mask[idx] = l_mask.numpy()
