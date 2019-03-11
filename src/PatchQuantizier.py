@@ -54,7 +54,7 @@ class PatchQuantizier():
                         mask = mf.tile_opt(self.output_rec.layers_layout[l], self.output_rec.all_patterns[l][c][p_idx],
                                            True)
                     else:
-                        mask = np.ones(self.output_rec.layers_layout[l], dtype=self.default_in_pattern.dtype)
+                        mask = np.ones(mf.expend_dims(self.output_rec.layers_layout[l], self.patch_size), dtype=self.default_in_pattern.dtype)
                         mask[c, :, :] = self.output_rec.all_patterns[l][c][p_idx]
 
                     nn.net.strict_mask_update(update_ids=[l], masks=[torch.from_numpy(mask)])

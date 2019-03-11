@@ -170,8 +170,8 @@ def show_final_mask_simplegrid_resnet18(
           (3,0), (3,1), (3,2), (3,3))
     
     fig = plt.figure()
-    fig.set_figheight(10) 
-    fig.set_figwidth(14)
+    fig.set_figheight(10*2) 
+    fig.set_figwidth(14*2)
     for l_to_plot_idx, l_to_plot in enumerate(rec.mask):
         l_to_plot = l_to_plot.numpy()
         
@@ -365,9 +365,7 @@ def get_baseline_rec(net_name, dataset_name, ps, init_acc):
         return bs_line_fn
     return load_from_file(bs_line_fn, '')
 
-
-if __name__ == '__main__':
-    
+def main_ops_summery():
     arr_layer = ops_saved_summery(net_name=cfg.NETS[0].__name__, dataset_name='CIFAR10',
                  mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
                  gran_thresh=10, init_acc=93.5, batch_size=cfg.BATCH_SIZE, 
@@ -387,20 +385,25 @@ if __name__ == '__main__':
                  mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
                  gran_thresh=10, init_acc=93.5, batch_size=cfg.BATCH_SIZE, 
                  max_samples=cfg.TEST_SET_SIZE)
+
+
+if __name__ == '__main__':
+    
+
     
 #    show_final_mask_grid_resnet18(
 #                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
-#                    gran_thresh=10, init_acc=93.5)
-#    
-#    show_final_mask_simplegrid_resnet18(
-#                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
 #                    gran_thresh=10, init_acc=93.5)
     
-#    rec = show_channel_grid(layer=4, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                 mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
-#                 gran_thresh=10, init_acc=93.5)
+#    show_final_mask_simplegrid_resnet18(
+#                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5)
+    
+    rec = show_channel_grid(layer=7, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+                 mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                 gran_thresh=10, init_acc=93.5)
 #    
 #    show_final_mask(show_all_layers=True, layers_to_show=None, show_all_channels=False,
 #                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
