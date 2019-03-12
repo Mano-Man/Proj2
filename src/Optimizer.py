@@ -21,7 +21,7 @@ import Config as cfg
 from Config import DATA as dat
 
 #for debugging
-INNAS_COMP = True
+INNAS_COMP = False
 DEBUG_INIT_ACC = 75.8
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -143,7 +143,6 @@ class Optimizer:
         best_FR = None
         for lq_rec_fn in self.record_finder.find_all_recs_fns(mode, RecordType.lQ_RESUME):
             in_rec_fn = '_'.join(os.path.basename(lq_rec_fn).split('_')[2:])
-            print(in_rec_fn)
             lq = LayerQuantizier(load_from_file(in_rec_fn,path=cfg.RESULTS_DIR), self.init_acc, self.max_acc_loss, self.ps, self.ones_range,
                                          self.get_total_ops(), lq_rec_fn)
             final_rec = lq.find_final_mask(acc_loss, nn=self.nn, test_gen=self.test_gen)
