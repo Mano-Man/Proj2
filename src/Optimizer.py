@@ -21,8 +21,8 @@ import Config as cfg
 from Config import DATA as dat
 
 #for debugging
-INNAS_COMP = False
-DEBUG_INIT_ACC = 98.7
+INNAS_COMP = True
+DEBUG_INIT_ACC = 75.8
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -137,6 +137,25 @@ class Optimizer:
         if RecordType.lQ_RESUME == rec_type:
             return
         return quantizier.output_rec
+    
+    def create_FR_with_different_acc_loss(self, mode, acc_loss):
+        self.record_finder.max_acc_loss = '*'
+        best_FR = None
+        for lq_rec_fn in self.record_finder.find_all_recs_fns(mode, RecordType.lQ_RESUME):
+            in_rec_fn = '_'.join(os.path.basename(lq_rec_fn).split('_')[2:])
+            print(in_rec_fn)
+            lq = LayerQuantizier(load_from_file(in_rec_fn,path=cfg.RESULTS_DIR), self.init_acc, self.max_acc_loss, self.ps, self.ones_range,
+                                         self.get_total_ops(), lq_rec_fn)
+            final_rec = lq.find_final_mask(acc_loss, nn=self.nn, test_gen=self.test_gen)
+            if best_FR is None:
+                best_FR = final_rec
+            elif best_FR.ops_saved < final_rec.ops_saved:
+                best_FR = final_rec
+        print(best_FR)
+        save_to_file(best_FR,True,cfg.RESULTS_DIR)
+        print('==> result saved to ' + best_FR.filename)
+        self.record_finder.max_acc_loss = self.max_acc_loss
+        return best_FR
 
     def run_mode(self, mode=None):
         if Mode.MAX_GRANULARITY == mode:

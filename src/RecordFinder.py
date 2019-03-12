@@ -44,6 +44,22 @@ class RecordFinder():
             return self._find_rec_file_by_time(self._baseline_rec_regex())
         else:
             return None
+        
+    def find_all_recs_fns(self, mode, record_type):
+        if record_type == RecordType.FIRST_LVL_REC:
+            return glob.glob(os.path.join(cfg.RESULTS_DIR, self._first_lvl_regex(mode))) 
+        elif record_type == RecordType.cQ_REC:
+            return glob.glob(os.path.join(cfg.RESULTS_DIR, self._cQ_regex(mode))) 
+        elif record_type == RecordType.lQ_RESUME:
+            return glob.glob(os.path.join(cfg.RESULTS_DIR, self._lQ_resume_regex(mode))) 
+        elif record_type == RecordType.pQ_REC:
+            return glob.glob(os.path.join(cfg.RESULTS_DIR, self._pQ_regex(mode))) 
+        elif record_type == RecordType.FINAL_RESULT_REC:
+            return glob.glob(os.path.join(cfg.RESULTS_DIR, self._final_rec_regex(mode))) 
+        elif record_type == RecordType.BASELINE_REC:
+            return glob.glob(os.path.join(cfg.RESULTS_DIR, self._baseline_rec_regex())) 
+        else:
+            return None
 
     def find_all_FRs(self, mode):
         regex = self._final_rec_regex(mode)

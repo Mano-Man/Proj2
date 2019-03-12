@@ -52,6 +52,17 @@ class LayerQuantResumeRec():
     def add_algo_debug_rec(self, acc, ops_saved, tot_ops):
         self.algo_debug.append([self.resume_index.copy(), acc, ops_saved, tot_ops, ops_saved/tot_ops])
         
+    def find_best_mask(self, min_acc):
+        indexes = None
+        best_ops_saved = 0
+        best_acc = min_acc
+        for opt, acc, ops_saved,_,_ in self.algo_debug:
+            if acc >= min_acc and best_ops_saved < ops_saved:
+                indexes = opt
+                best_ops_saved = ops_saved
+                best_acc = acc
+        return indexes, best_ops_saved, best_acc
+        
     def save_csv(self, fn):
         out_path = os.path.join(cfg.RESULTS_DIR, fn + ".csv")
         with open(out_path, 'w', newline='') as f:
@@ -283,3 +294,28 @@ class LayerQuantizier():
             else:
                 self.curr_acc_th = acc
         return True
+    
+    def find_final_mask(self, max_acc_loss, nn=None, test_gen=None, should_save=False):
+        init_acc = self.max_acc_loss + self.min_acc
+        new_min_acc = init_acc - max_acc_loss
+        if not self.resume_rec.is_finised():
+            print('Simulation not finished!')
+            if nn is not None and test_gen is not None:
+                self.simulate(nn, test_gen)
+        final_mask_indexes, best_ops_saved, best_acc = self.resume_rec.find_best_mask(new_min_acc)
+        if final_mask_indexes is None:
+            print(f'==> No suitable Option was found for min accuracy of {new_min_acc}')
+            return None
+        self.sp_list = [None] * len(final_mask_indexes)
+        for l_idx, p_idx in enumerate(final_mask_indexes):
+            self._update_layer( l_idx, p_idx)
+        f_rec = FinalResultRc(init_acc, best_acc, best_ops_saved, 
+                              self.resume_rec.curr_tot_ops, self.mode, self.sp_list, 
+                              self.patch_size, max_acc_loss, self.ones_range, cfg.NET.__name__, 
+                              dat.name(), self.layers_layout)
+        if should_save:
+            save_to_file(f_rec,True,cfg.RESULTS_DIR)
+            print('==> result saved to ' + f_rec.filename)
+        return f_rec
+            
+        
