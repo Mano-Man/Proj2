@@ -378,14 +378,6 @@ class Record():
 class FinalResultRc():
     def __init__(self, init_acc, f_acc, ops_saved, tot_ops, mode, pattern, ps, max_acc_loss,
                  ones_range, net_name, dataset_name, layers_layout):
-        quant_name = f'LQ{cfg.LQ_OPTION.value}'
-        if mode == Mode.UNIFORM_PATCH or mode == Mode.MAX_GRANULARITY:
-            quant_name += f'_CQ{cfg.CQ_OPTION.value}r{cfg.CHANNELQ_UPDATE_RATIO}'
-        if mode == Mode.UNIFORM_FILTERS or mode == Mode.MAX_GRANULARITY:
-            quant_name += f'_PQ{cfg.PQ_OPTION.value}r{cfg.PATCHQ_UPDATE_RATIO}'
-        self.filename = f'FR_{net_name}_{dataset_name}_acc{init_acc}_{quant_name}'
-        self.filename+= f'_ps{ps}_ones{ones_range[0]}x{ones_range[1]}_'
-        self.filename+= f'{gran_dict[mode]}_ma{max_acc_loss}_os{round((ops_saved/tot_ops)*100, 3)}_fa{f_acc}'
         self.mask = pattern
         self.final_acc = f_acc
         self.ops_saved = ops_saved
@@ -400,6 +392,32 @@ class FinalResultRc():
         self.layers_layout = layers_layout
         self.pQ_ratio = cfg.PATCHQ_UPDATE_RATIO
         self.cQ_ratio = cfg.CHANNELQ_UPDATE_RATIO
+        self._create_filename()
+        
+    def _create_filename(self, epochs=None, lr=None):
+        quant_name = f'LQ{cfg.LQ_OPTION.value}'
+        if self.mode == Mode.UNIFORM_PATCH or self.mode == Mode.MAX_GRANULARITY:
+            quant_name += f'_CQ{cfg.CQ_OPTION.value}r{cfg.CHANNELQ_UPDATE_RATIO}'
+        if self.mode == Mode.UNIFORM_FILTERS or self.mode == Mode.MAX_GRANULARITY:
+            quant_name += f'_PQ{cfg.PQ_OPTION.value}r{cfg.PATCHQ_UPDATE_RATIO}'
+        if epochs is None or lr is None:
+            self.filename= 'FR_'
+        else:
+            self.filename= f'FR_retain_e{epochs}lr{lr}_'
+        self.filename+= f'{self.network}_{self.dataset_name}_acc{self.init_acc}_{quant_name}'
+        self.filename+= f'_ps{self.patch_size}_ones{self.ones_range[0]}x{self.ones_range[1]}_'
+        self.filename+= f'{gran_dict[self.mode]}_ma{self.max_acc_loss}_os{round((self.ops_saved/self.total_ops)*100, 3)}_fa{self.final_acc}'
+        
+    def retrain_update(self,test_acc, ops_saved, ops_total, epochs, lr):
+        self.final_acc = test_acc
+        self.ops_saved = ops_saved
+        self.total_ops = ops_total
+        self.epochs = epochs
+        self.lr = lr
+        self._create_filename(epochs=epochs, lr=lr)
+        
+    def get_retrain_prefix(self):
+        return f'ps{self.patch_size}_ones{self.ones_range[0]}x{self.ones_range[1]}_{gran_dict[self.mode]}_ma{self.max_acc_loss}'
 
     def __str__(self):
         string = "================================================================\n"

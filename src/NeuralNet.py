@@ -25,7 +25,7 @@ class NeuralNet:
     # This wrapper presumes we are dealing with a:
     # 1. PytorchNet object
     # 2. Input arguments to constructor are: self.device, dat.num_classes(), dat.input_channels(), dat.shape()
-    def __init__(self, resume=True):
+    def __init__(self, resume=True, ckp_name_prefix=None):
 
         # Decide on device:
         if torch.cuda.is_available():
@@ -50,7 +50,7 @@ class NeuralNet:
             print(f'==> Resuming from checkpoint via sorting method: {cfg.RESUME_METHOD}')
             assert os.path.isdir(cfg.CHECKPOINT_DIR), 'Error: no checkpoint directory found!'
 
-            ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD](self.net.family_name())
+            ck_file = self.__class__.resume_methods[cfg.RESUME_METHOD](self.net.family_name(), ckp_name_prefix=ckp_name_prefix)
             if ck_file is None:
                 print(f'-E- Found no valid checkpoints for {net.__name__} on {dat.name()}')
                 self.best_val_acc = 0
@@ -75,7 +75,9 @@ class NeuralNet:
         self.train_gen, self.val_gen, self.classes = (None, None, None)
         self.optimizer = None
 
-    def train(self, epochs, lr=0.1, set_size=None, batch_size=cfg.BATCH_SIZE):
+    def train(self, epochs, lr=0.1, set_size=None, batch_size=cfg.BATCH_SIZE, ckp_name_prefix=None):
+        if ckp_name_prefix is not None:
+            self.best_val_acc = 0
 
         (self.train_gen, set_size), (self.val_gen, _) = dat.trainset(batch_size=batch_size, max_samples=set_size)
         print(f'==> Training on {set_size} samples with batch size of {batch_size} and lr = {lr}')
@@ -109,7 +111,7 @@ class NeuralNet:
                 p.add(1,
                       values=[("t_loss", train_loss), ("t_acc", train_acc), ("v_loss", val_loss), ("v_acc", val_acc),
                               ("lr", self.optimizer.param_groups[0]['lr'])])
-            self._checkpoint(val_acc, epoch + 1)
+            self._checkpoint(val_acc, epoch + 1, ckp_name_prefix=ckp_name_prefix)
         t_end = time.time()
         print(f'==> Total train time: {t_end - t_start:.3f} secs :: per epoch: {(t_end - t_start) / epochs:.3f} secs')
         banner('Training Phase - End')
@@ -156,12 +158,20 @@ class NeuralNet:
     def output_size(self, x_shape, cuda_allowed=True):
         return self.net.output_size(x_shape, cuda_allowed)
 
-    def _checkpoint(self, val_acc, epoch):
+    def _checkpoint(self, val_acc, epoch, ckp_name_prefix=None):
 
         # Decide on whether to checkpoint or not:
         save_it = val_acc > self.best_val_acc
         if save_it and cfg.DONT_SAVE_REDUNDANT:
-            target = os.path.join(cfg.CHECKPOINT_DIR, f'{self.net.family_name()}_{dat.name()}_*_ckpt.t7')
+#            target = os.path.join(cfg.CHECKPOINT_DIR, f'{self.net.family_name()}_{dat.name()}_*_ckpt.t7')
+#            checkpoints = [os.path.basename(f) for f in glob.glob(target)]
+#            if ckp_name_prefix is not None:
+#                target = os.path.join(cfg.CHECKPOINT_DIR, f'{self.net.family_name()}_{dat.name()}_*_ckpt_{ckp_name_prefix}.t7')
+#                checkpoints += [os.path.basename(f) for f in glob.glob(target)]
+            if ckp_name_prefix is None:
+                target = os.path.join(cfg.CHECKPOINT_DIR, f'{self.net.family_name()}_{dat.name()}_*_ckpt.t7')
+            else:
+                target = os.path.join(cfg.CHECKPOINT_DIR, f'{self.net.family_name()}_{dat.name()}_*_ckpt_{ckp_name_prefix}.t7')
             checkpoints = [os.path.basename(f) for f in glob.glob(target)]
             if checkpoints:
                 best_cp_val_acc = max(
@@ -181,8 +191,11 @@ class NeuralNet:
             }
             if not os.path.isdir(cfg.CHECKPOINT_DIR):
                 os.mkdir(cfg.CHECKPOINT_DIR)
-
-            cp_name = f'{self.net.family_name()}_{dat.name()}_{val_acc}_ckpt.t7'
+            
+            if ckp_name_prefix is None:
+                cp_name = f'{self.net.family_name()}_{dat.name()}_{val_acc}_ckpt.t7'
+            else:
+                cp_name = f'{self.net.family_name()}_{dat.name()}_{val_acc}_ckpt_{ckp_name_prefix}.t7'
             torch.save(state, os.path.join(cfg.CHECKPOINT_DIR, cp_name))
             self.best_val_acc = val_acc
 
@@ -217,7 +230,7 @@ class NeuralNet:
         return train_loss, total_acc, count
 
     def _load_checkpoint(self, loaded_dict, optional_fill=('.*\.num_batches_tracked',),
-                         total_ignore=('.*pred\.', '.*pred2\.', '.*pred1\.')):
+                         total_ignore=('.*pred\.', '.*pred2\.', '.*pred1\.', 'features\..*\.conv_filt\.weight')):
 
         # Make a regex that matches if any of our regexes match.
         opt_fill = "(" + ")|(".join(optional_fill) + ")"
@@ -260,9 +273,11 @@ class NeuralNet:
         return list_correct
 
     @staticmethod
-    def _find_top_val_acc_checkpoint(family_name):
-
-        target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt.t7')
+    def _find_top_val_acc_checkpoint(family_name, ckp_name_prefix):
+        if ckp_name_prefix is None:
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt.t7')
+        else:
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt_{ckp_name_prefix}.t7')
         checkpoints = [os.path.basename(f) for f in glob.glob(target)]
         if not checkpoints:
             return None
@@ -272,8 +287,11 @@ class NeuralNet:
             return os.path.join(cfg.CHECKPOINT_DIR, checkpoints[-1])
 
     @staticmethod
-    def _find_latest_checkpoint(family_name):
-        target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt.t7')
+    def _find_latest_checkpoint(family_name, ckp_name_prefix):
+        if ckp_name_prefix is None:
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt.t7')
+        else:
+            target = os.path.join(cfg.CHECKPOINT_DIR, f'{family_name}_{dat.name()}_*_ckpt_{ckp_name_prefix}.t7')
         checkpoints = glob.glob(target)
         if not checkpoints:
             return None

@@ -155,6 +155,33 @@ class Optimizer:
         print('==> result saved to ' + best_FR.filename)
         self.record_finder.max_acc_loss = self.max_acc_loss
         return best_FR
+    
+    def retrain_with_mask(self, final_rec, epochs=50, lr=0.01):
+        ckp_name_prefix = final_rec.get_retrain_prefix()
+        self._init_nn()
+        self.nn.net.strict_mask_update(update_ids=list(range(len(final_rec.mask))), masks=final_rec.mask)
+        self.nn.net.print_spatial_status()
+        self.nn.train(epochs=epochs, lr=lr, ckp_name_prefix=ckp_name_prefix)
+        
+    def create_FR_after_retrain(self, mode, acc_loss, retrain=True, epochs=50, lr=0.01):
+        final_rec = self.create_FR_with_different_acc_loss(mode, acc_loss)
+        if retrain:
+            self.retrain_with_mask(final_rec, epochs=epochs, lr=lr)
+        retrain_nn = NeuralNet(ckp_name_prefix=final_rec.get_retrain_prefix())
+        retrain_nn.net.initialize_spatial_layers(dat.shape(), cfg.BATCH_SIZE, self.ps)
+        retrain_nn.net.reset_spatial()
+        retrain_nn.net.strict_mask_update(update_ids=list(range(len(final_rec.mask))), masks=final_rec.mask)
+        if INNAS_COMP:
+            test_acc = 100
+            ops_saved = 100
+            ops_total = 100
+        else:
+            _, test_acc, _ = retrain_nn.test(self.test_gen)
+            ops_saved, ops_total = retrain_nn.net.num_ops()
+        final_rec.retrain_update(test_acc, ops_saved, ops_total, epochs, lr)
+        print(final_rec)
+        save_to_file(final_rec, path=cfg.RESULTS_DIR)
+        
 
     def run_mode(self, mode=None):
         if Mode.MAX_GRANULARITY == mode:

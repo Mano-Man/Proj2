@@ -114,7 +114,8 @@ def ops_saved_summery(net_name=cfg.NET.__name__, dataset_name=cfg.DATA.name(),
 
 def show_channel_grid(layer=0, net_name='*', dataset_name='*',
                  mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
-                 gran_thresh='*', init_acc='*', filename=None):
+                 gran_thresh='*', init_acc='*', filename=None,
+                 font_size = 22, show_patch_grid = False):
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
     final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
     if final_rec_fn is None:
@@ -129,17 +130,20 @@ def show_channel_grid(layer=0, net_name='*', dataset_name='*',
     fig, axs = plt.subplots(nrows=rows, ncols=rows)
     fig.set_figheight(30) 
     fig.set_figwidth(30)
+    plt.rcParams.update({'font.size': font_size})
     
     for c in range(layer_mask.shape[0]):
         row_idx = math.floor(c/rows)
         col_idx = c - row_idx*rows
         axs[row_idx][col_idx].imshow(layer_mask[c], cmap=plt.cm.gray) #(0:black, 1:white)
-        axs[row_idx][col_idx].set_title(f'Channel:{c}')
+        axs[row_idx][col_idx].set_title(f'{c}')
+        
         # Minor ticks
         axs[row_idx][col_idx].set_xticks(np.arange(-.5, layer_mask[c].shape[0] - 1, rec.patch_size), minor=True);
         axs[row_idx][col_idx].set_yticks(np.arange(-.5, layer_mask[c].shape[1] - 1, rec.patch_size), minor=True);
         # Gridlines based on minor ticks
-        #axs[row_idx][col_idx].grid(which='minor', color='r', linestyle='-', linewidth=2)
+        if show_patch_grid:
+            axs[row_idx][col_idx].grid(which='minor', color='r', linestyle='-', linewidth=2)
         axs[row_idx][col_idx].tick_params(axis='both', which='major', bottom=False, top=False,
                         left=False, right=False, labelbottom=False, labelleft=False)
         #axs[row_idx][col_idx].colorbar()
@@ -155,7 +159,8 @@ def show_channel_grid(layer=0, net_name='*', dataset_name='*',
 def show_final_mask_simplegrid_resnet18(
                     channel=0, net_name='*', dataset_name='*',
                     mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
-                    gran_thresh='*', init_acc='*', filename=None):
+                    gran_thresh='*', init_acc='*', filename=None,
+                    font_size = 22, show_patch_grid = False):
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
     final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
     if final_rec_fn is None:
@@ -172,19 +177,21 @@ def show_final_mask_simplegrid_resnet18(
     fig = plt.figure()
     fig.set_figheight(10*2) 
     fig.set_figwidth(14*2)
+    plt.rcParams.update({'font.size': font_size})
     for l_to_plot_idx, l_to_plot in enumerate(rec.mask):
         l_to_plot = l_to_plot.numpy()
         
         
         plt.subplot2grid(grid, st[l_to_plot_idx])
         plt.imshow(l_to_plot[channel], cmap=plt.cm.gray) #(0:black, 1:white)
-        plt.title(f'Layer:{l_to_plot_idx}')
+        plt.title(f'{l_to_plot_idx}')
         ax = plt.gca()
         # Minor ticks
         ax.set_xticks(np.arange(-.5, l_to_plot[channel].shape[0] - 1, rec.patch_size), minor=True);
         ax.set_yticks(np.arange(-.5, l_to_plot[channel].shape[1] - 1, rec.patch_size), minor=True);
         # Gridlines based on minor ticks
-        #ax.grid(which='minor', color='r', linestyle='-', linewidth=2)
+        if show_patch_grid:
+            ax.grid(which='minor', color='r', linestyle='-', linewidth=4)
         plt.tick_params(axis='both', which='major', bottom=False, top=False,
                         left=False, right=False, labelbottom=False, labelleft=False)
         #plt.colorbar()
@@ -198,7 +205,8 @@ def show_final_mask_simplegrid_resnet18(
 def show_final_mask_grid_resnet18(
                     channel=0, net_name='*', dataset_name='*',
                     mode=Mode.ALL_MODES, ps='*', ones_range=('*', '*'), acc_loss='*',
-                    gran_thresh='*', init_acc='*', filename=None):
+                    gran_thresh='*', init_acc='*', filename=None,
+                    font_size = 22, show_patch_grid = False):
     rec_finder = RecordFinder(net_name, dataset_name, ps, ones_range, gran_thresh, acc_loss, init_acc)
     final_rec_fn = rec_finder.find_rec_filename(mode, RecordType.FINAL_RESULT_REC)
     if final_rec_fn is None:
@@ -214,24 +222,28 @@ def show_final_mask_grid_resnet18(
     span = (8,8,8,8,8,4,4,4,4,2,2,2,2,2,2,2,2)
     
     fig = plt.figure()
+    plt.tight_layout()
     fig.set_figheight(10) 
-    fig.set_figwidth(15)
+    fig.set_figwidth(13)
+    plt.rcParams.update({'font.size': font_size})
     for l_to_plot_idx, l_to_plot in enumerate(rec.mask):
         l_to_plot = l_to_plot.numpy()
         
         
         plt.subplot2grid(grid, st[l_to_plot_idx], colspan=span[l_to_plot_idx], rowspan=span[l_to_plot_idx])
         plt.imshow(l_to_plot[channel], cmap=plt.cm.gray) #(0:black, 1:white)
-        plt.title(f'Layer:{l_to_plot_idx}')
+        plt.title(f'{l_to_plot_idx}')
         ax = plt.gca()
         # Minor ticks
         ax.set_xticks(np.arange(-.5, l_to_plot[channel].shape[0] - 1, rec.patch_size), minor=True);
         ax.set_yticks(np.arange(-.5, l_to_plot[channel].shape[1] - 1, rec.patch_size), minor=True);
         # Gridlines based on minor ticks
-        ax.grid(which='minor', color='r', linestyle='-', linewidth=2)
+        if show_patch_grid:
+            ax.grid(which='minor', color='r', linestyle='-', linewidth=2)
         plt.tick_params(axis='both', which='major', bottom=False, top=False,
                         left=False, right=False, labelbottom=False, labelleft=False)
-    plt.tight_layout()    
+    plt.tight_layout()
+    plt.subplots_adjust(top=1)    
     if filename is None:
         plt.show()
     else:
@@ -389,34 +401,30 @@ def main_ops_summery():
 
 if __name__ == '__main__':
     
-
-    
 #    show_final_mask_grid_resnet18(
 #                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
-#                    gran_thresh=10, init_acc=93.5)
-    
+#                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5, font_size = 26, show_patch_grid = False)
+#    
+#    show_final_mask_grid_resnet18(
+#                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5, font_size = 26, show_patch_grid = True)
+#    
 #    show_final_mask_simplegrid_resnet18(
 #                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_LAYER, ps=2, ones_range=(1, 3), acc_loss=3.5,
-#                    gran_thresh=10, init_acc=93.5)
-    
-    rec = show_channel_grid(layer=7, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-                 mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
-                 gran_thresh=10, init_acc=93.5)
+#                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5, font_size = 32, show_patch_grid = False)
 #    
-#    show_final_mask(show_all_layers=True, layers_to_show=None, show_all_channels=False,
-#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_FILTERS, ps=2, ones_range=(1, 3), acc_loss=3.5,
-#                    gran_thresh=10, init_acc=93.5)
+#    show_final_mask_simplegrid_resnet18(
+#                    channel=2, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+#                    mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+#                    gran_thresh=10, init_acc=93.5, font_size = 32, show_patch_grid = True)
+    rec = show_channel_grid(layer=7, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
+                 mode=Mode.MAX_GRANULARITY, ps=2, ones_range=(1, 3), acc_loss=3.5,
+                 gran_thresh=0, init_acc=93.5, font_size = 32, show_patch_grid = False)
     
-#    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
-#                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
-#                    mode=Mode.UNIFORM_PATCH, ps=2, ones_range=(1, 3), acc_loss=3.5,
-#                    gran_thresh=10, init_acc=93.5)
-#    uniform_patch_mask = [None]*len(rec.mask)
-#    for idx, l_mask in enumerate(rec.mask):
-#        uniform_patch_mask[idx] = l_mask.numpy()
+
 #        
 #    rec = show_final_mask(show_all_layers=False, layers_to_show=[], show_all_channels=False,
 #                    channels_to_show=None, plot_3D=False, net_name=cfg.NETS[0].__name__, dataset_name=cfg.DATA.name(),
