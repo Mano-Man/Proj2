@@ -102,18 +102,18 @@ def info_tutorial():
 
 
 def data_tutorial():
-    dat.data_summary()
-    print(dat.name())
-    print(dat.num_classes())
-    print(dat.input_channels())
-    print(dat.class_labels())
-    print(dat.max_test_size())
-    print(dat.max_train_size())
-    print(dat.shape())
-    (train_loader, num_train), (valid_loader, num_valid) = dat.trainset(batch_size=cfg.BATCH_SIZE,
-                                                                        max_samples=dat.max_train_size(),
-                                                                        show_sample=True)
-    test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
+    dat.data_summary(show_sample=True)
+    # print(dat.name())
+    # print(dat.num_classes())
+    # print(dat.input_channels())
+    # print(dat.class_labels())
+    # print(dat.max_test_size())
+    # print(dat.max_train_size())
+    # print(dat.shape())
+    # (train_loader, num_train), (valid_loader, num_valid) = dat.trainset(batch_size=cfg.BATCH_SIZE,
+    #                                                                     max_samples=dat.max_train_size(),
+    #                                                                     show_sample=True)
+    # test_gen, testset_siz = dat.testset(batch_size=cfg.BATCH_SIZE, max_samples=cfg.TEST_SET_SIZE)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -245,6 +245,7 @@ def main_1x3_ones():
 
 
 if __name__ == '__main__':
-    run_all_acc_loss_possibilities(2, (1, 3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=[3.5])
+    data_tutorial()
+    # run_all_acc_loss_possibilities(2, (1, 3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=[3.5])
     # patch3x3(20)
     # main_1x3_ones()
