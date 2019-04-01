@@ -68,6 +68,7 @@ def info_tutorial():
     nn.net.print_spatial_status()
     # nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see fully disabled performance
     nn.net.print_ops_summary()
+    nn.net.print_ops_summary(use_conv=True) # Count convlution operations instead of MAC
     print(nn.net.num_ops())  # (ops_saved, total_ops)
 
     # Given x, we generate all spatial layer requirement sizes:
@@ -84,8 +85,10 @@ def info_tutorial():
     nn.net.print_spatial_status()  # Now all are enabled, seeing the mask was set
     nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Train to see all layers enabled performance
     nn.net.print_ops_summary()
+    nn.net.print_ops_summary(use_conv=True)  # Count convlution operations instead of MAC
     nn.net.reset_spatial()  # Disables layers as well
     nn.net.print_ops_summary()
+    nn.net.print_ops_summary(use_conv=True)
     # Turns on 3 ids and turns off all others
     chosen_victims = random.sample(range(nn.net.num_spatial_layers()), 4)
     nn.net.strict_mask_update(update_ids=chosen_victims[0:3],
@@ -99,6 +102,7 @@ def info_tutorial():
     print(nn.net.enabled_layers())
     nn.train(epochs=1, set_size=5000, lr=0.1, batch_size=cfg.BATCH_SIZE)  # Run with 4 layers on
     nn.net.print_ops_summary()
+    nn.net.print_ops_summary(use_conv=True)
 
 
 def data_tutorial():
@@ -245,7 +249,7 @@ def main_1x3_ones():
 
 
 if __name__ == '__main__':
-    data_tutorial()
+    info_tutorial()
     # run_all_acc_loss_possibilities(2, (1, 3), 10, Mode.UNIFORM_PATCH, acc_loss_opts=[3.5])
     # patch3x3(20)
     # main_1x3_ones()

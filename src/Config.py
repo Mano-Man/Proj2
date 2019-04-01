@@ -24,10 +24,10 @@ DATASET_DIR = os.path.join(basedir, 'datasets')
 # ----------------------------------------------------------------------------------------------------------------------
 # Global Adjustments:
 NETS = [ResNet18Spatial,ResNet18SpatialUniBlock,ResNet18SpatialUniCluster, ResNet34Spatial, AlexNetS]
-NET = NETS[4]  # The chosen network
+NET = NETS[0]  # The chosen network
 
 #print(Datasets.which()) #('MNIST', 'CIFAR10', 'ImageNet', 'TinyImageNet', 'STL10', 'FashionMNIST')
-DATA = Datasets.get('STL10',DATASET_DIR)
+DATA = Datasets.get('CIFAR10',DATASET_DIR)
 
 BATCH_SIZE = 128
 TEST_SET_SIZE = 1000 #BATCH_SIZE * 8  # Better to align it to Batch Size for speed!

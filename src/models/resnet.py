@@ -98,11 +98,11 @@ class BasicBlockS(BasicBlock):
         self.is_uniform = True if pred1 is not None and pred1 == pred2 else False
 
         if pred1 is None:
-            self.pred1 = Spatial(planes)
+            self.pred1 = Spatial(planes,3*3*in_planes)
         else:
             self.pred1 = pred1
         if pred2 is None:
-            self.pred2 = Spatial(planes)
+            self.pred2 = Spatial(planes,3*3*planes)
         else:
             self.pred2 = pred2
 
@@ -138,7 +138,7 @@ class ResNetS(SpatialNet):
         # Net Structure: Spatial layers are turned off by default
         self.conv1 = nn.Conv2d(input_channels, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(self.in_planes)
-        self.pred = Spatial(self.in_planes)
+        self.pred = Spatial(self.in_planes, input_channels*3*3)
 
         self.clustering_index = 1
         self.clustering_indices = [0]  # Contains first layer

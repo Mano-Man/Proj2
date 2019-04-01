@@ -13,12 +13,15 @@ from math import log10,floor,ceil
 #                                              Spatial Layer Implementation
 # ----------------------------------------------------------------------------------------------------------------------
 class Spatial(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels,conv_to_MAC):
         super().__init__()
 
         self.channels = channels
+        self.conv_to_MAC = conv_to_MAC
         self.ops_saved = 0
         self.total_ops = 0
+        self.total_conv = 0
+        self.conv_saved = 0
         self.is_init = False
         self.enable = False
         self.mask = None
@@ -63,9 +66,23 @@ class Spatial(nn.Module):
         # To be used only after layer is initialized to input size
         self.enable = enable
 
+    def num_ops_saved(self,use_conv=False):
+        if use_conv:
+            return self.conv_saved
+        else:
+            return self.ops_saved
+
+    def num_ops_total(self,use_conv=False):
+        if use_conv:
+            return self.total_conv
+        else:
+            return self.total_ops
+
     def reset_ops(self):
         self.total_ops = 0
         self.ops_saved = 0
+        self.conv_saved =0
+        self.total_conv = 0
 
     def forward(self, x):
         if not self.enable:
@@ -89,8 +106,10 @@ class Spatial(nn.Module):
             reshape(b.size(0), b.size(1), self.p_size, -1).permute(0, 1, 3, 2). \
             reshape(b.size(0), b.size(1), b.size(2) * self.p_size, -1)
 
-        self.ops_saved += torch.sum(torch.mul(1 - b_expanded, 1 - batch_mask))
-        self.total_ops += x.shape[0] * x.shape[1] * x.shape[2] * x.shape[3]
+        self.conv_saved += torch.sum(torch.mul(1 - b_expanded, 1 - batch_mask))
+        self.total_conv += x.shape[0] * x.shape[1] * x.shape[2] * x.shape[3]
+        self.ops_saved += self.conv_to_MAC*self.conv_saved
+        self.total_ops += self.conv_to_MAC*self.total_conv
         # Out predicator (after padding removal)
         if self.pad_s == 0:
             return torch.mul(x, b_expanded)
@@ -142,27 +161,45 @@ class SpatialNet(PytorchNet):
             total_ops += sp.total_ops
         return ops_saved, total_ops
 
-    def print_ops_summary(self):
+    def num_conv(self):
+        conv_saved = 0
+        total_conv = 0
+        for sp in self.spatial_layers:
+            conv_saved += int(sp.conv_saved)
+            total_conv += sp.total_conv
+        return conv_saved, total_conv
 
-        all_ops_saved, all_total_ops = self.num_ops()
+    def print_ops_summary(self,use_conv=False):
+
+        if use_conv:
+            name = 'Conv'
+            all_ops_saved, all_total_ops = self.num_conv()
+        else:
+            name = 'MAC'
+            all_ops_saved, all_total_ops = self.num_ops()
+
         for i, l in enumerate(self.spatial_layers):
-            if l.total_ops == 0:
-                print(f'Spatial Layer {i}: Ops saved: {l.ops_saved}/{l.total_ops}')
+
+            total_ops = l.num_ops_total(use_conv)
+            saved_ops = l.num_ops_saved(use_conv)
+
+            if total_ops == 0:
+                print(f'Spatial Layer {i}: {name} Ops saved: {saved_ops}/{total_ops}')
             else:
                 spacer = ' ' * (len(str(len(self.spatial_layers))) - len(str(i)))
-                assert(l.ops_saved <= all_ops_saved)
+                assert(saved_ops <= all_ops_saved)
                 if all_ops_saved ==0: # Handle div by 0 case
                     midstr = '0'
                 else:
                     midstr = f'{l.ops_saved*100/all_ops_saved:.3f}'
                 print(
-                    f'Spatial Layer {i}:{spacer} Ops saved: {l.ops_saved*100 /l.total_ops:.3f} % [{int(l.ops_saved)} / {l.total_ops}]',
-                    f'of [{midstr} % / {l.total_ops*100/all_total_ops:.3f} %]')
+                    f'Spatial Layer {i}:{spacer} {name} Ops saved: {saved_ops*100 /total_ops:.3f} % [{int(saved_ops)} / {total_ops}]',
+                    f'of [{midstr} % / {total_ops*100/all_total_ops:.3f} %]')
 
         if all_total_ops > 0:
-            print(f'Grand total: {all_ops_saved}/{all_total_ops} {all_ops_saved*100/all_total_ops:.3f} %')
+            print(f'Grand total [{name}]: {all_ops_saved}/{all_total_ops} {all_ops_saved*100/all_total_ops:.3f} %')
         else:
-            print(f'Grand total: {all_ops_saved}/{all_total_ops}')
+            print(f'Grand total [{name}]: {all_ops_saved}/{all_total_ops}')
 
     def initialize_spatial_layers(self, x_shape, batch_size, p_size,freeze=True):
 

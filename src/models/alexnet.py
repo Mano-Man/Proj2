@@ -22,21 +22,21 @@ class AlexNetS(SpatialNet):
         self.features = nn.Sequential(
             nn.Conv2d(input_channels, 64, kernel_size=11, stride=4, padding=params[0]), # padding=2
             nn.ReLU(inplace=True),
-            Spatial(64),
+            Spatial(64,11*11*input_channels),
             nn.MaxPool2d(kernel_size=params[1], stride=2), #Kernel size = 3
             nn.Conv2d(64, 192, kernel_size=5, padding=2),
             nn.ReLU(inplace=True),
-            Spatial(192),
+            Spatial(192,5*5*64),
             nn.MaxPool2d(kernel_size=params[2], stride=2), #kernel size = 3
             nn.Conv2d(192, 384, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            Spatial(384),
+            Spatial(384,3*3*192),
             nn.Conv2d(384, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            Spatial(256),
+            Spatial(256,3*3*384),
             nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            Spatial(256),
+            Spatial(256,3*3*256),
             nn.MaxPool2d(kernel_size=params[3], stride=2),#kernel size = 3
 
         )
